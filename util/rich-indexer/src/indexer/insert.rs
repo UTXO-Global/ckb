@@ -280,9 +280,11 @@ pub(crate) async fn bulk_insert_output_table(
     tx: &mut Transaction<'_, Any>,
 ) -> Result<(), Error> {
     let mut new_rows: Vec<Vec<FieldValue>> = Vec::new();
+    // UDT variables
     let mut new_udt_rows: Vec<Vec<FieldValue>> = Vec::new();
     let mut new_xudt_type_script_ids: Vec<i64> = Vec::new();
     let mut new_unique_cells_data: Vec<Vec<u8>> = Vec::new();
+    let mut new_udt_outputs: Vec<Vec<FieldValue>> = Vec::new();
 
     for row in output_cell_rows {
         let type_script_id = if let Some(type_script) = &row.3 {
@@ -306,6 +308,14 @@ pub(crate) async fn bulk_insert_output_table(
                                 _type_script_id.into() // type script id
                             ];
                             new_udt_rows.push(new_udt_row);
+
+                            let new_udt_output: Vec<FieldValue> = vec![
+                                tx_id.into(), // tx_id
+                                row.0.into(), // output_index
+                                _type_script_id.into(), // type_script_id
+                                row.4.clone()[0..16].to_vec().into() // amount u128 - first 16 bytes, we cannot use bigint because of 8 bytes
+                            ];
+                            new_udt_outputs.push(new_udt_output);
                         }
                         // Mainnet + Testnet xudt
                         "50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95" 
@@ -366,6 +376,15 @@ pub(crate) async fn bulk_insert_output_table(
         "udt",
         &["data", "type", "type_script_id"],
         &new_udt_rows,
+        None,
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "udt_output",
+        &["tx_id", "output_index", "type_script_id", "amount"],
+        &new_udt_outputs,
         None,
         tx,
     )

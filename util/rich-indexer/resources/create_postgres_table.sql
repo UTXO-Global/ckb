@@ -84,12 +84,10 @@ CREATE TABLE udt(
     UNIQUE type_script_id
 );
 
-CREATE TABLE udt_ownership(
+CREATE TABLE udt_output(
     id BIGSERIAL PRIMARY KEY,
     tx_id BIGINT NOT NULL,
     output_index INTEGER NOT NULL,
-    udt_id BIGINT NOT NULL,
-    lock_script_id BIGINT, -- { args, code_hash, hash_type = lock } (link to script table)
-    amount BIGINT NOT NULL,
-    outpoint
+    type_script_id BIGINT NOT NULL,
+    amount BYTEA NOT NULL
 );
