@@ -75,3 +75,21 @@ CREATE TABLE script(
     args BYTEA,
     UNIQUE(code_hash, hash_type, args)
 );
+
+CREATE TABLE udt(
+    id BIGSERIAL PRIMARY KEY,
+    data BYTEA, -- decimal, name, symbol
+    type SMALLINT NOT NULL, -- xudt or sudt
+    type_script_id BIGINT, -- { args, code_hash, hash_type = type } (link to script table)
+    UNIQUE type_script_id
+);
+
+CREATE TABLE udt_ownership(
+    id BIGSERIAL PRIMARY KEY,
+    tx_id BIGINT NOT NULL,
+    output_index INTEGER NOT NULL,
+    udt_id BIGINT NOT NULL,
+    lock_script_id BIGINT, -- { args, code_hash, hash_type = lock } (link to script table)
+    amount BIGINT NOT NULL,
+    outpoint
+);

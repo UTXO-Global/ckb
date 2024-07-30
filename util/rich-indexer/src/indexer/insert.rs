@@ -16,7 +16,6 @@ use sqlx::{
     query::Query,
     Row, Transaction,
 };
-
 use std::collections::HashSet;
 
 // Note that every database has a practical limit on the number of bind parameters you can add to a single query.
@@ -281,9 +280,54 @@ pub(crate) async fn bulk_insert_output_table(
     tx: &mut Transaction<'_, Any>,
 ) -> Result<(), Error> {
     let mut new_rows: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_udt_rows: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_xudt_type_script_ids: Vec<i64> = Vec::new();
+    let mut new_unique_cells_data: Vec<Vec<u8>> = Vec::new();
+
     for row in output_cell_rows {
         let type_script_id = if let Some(type_script) = &row.3 {
-            query_script_id(&type_script.0, type_script.1, &type_script.2, tx).await?
+            let _type_script_id =
+                query_script_id(&type_script.0, type_script.1, &type_script.2, tx).await?;
+
+            if let Some(_type_script_id) = _type_script_id {
+                let code_hash = type_script.0.clone();
+
+                let code_hash_hex = hex::encode(&code_hash);
+                match code_hash_hex.as_str() {
+                        // ------------
+                        // UDT
+                        // Mainnet sudt
+                        "5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5"
+                        // Testnet sudt
+                        | "c5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4" => {
+                            let new_udt_row: Vec<FieldValue> = vec![
+                                vec![].into(), // data
+                                0.into(), // sudt type
+                                _type_script_id.into() // type script id
+                            ];
+                            new_udt_rows.push(new_udt_row);
+                        }
+                        // Mainnet + Testnet xudt
+                        "50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95" 
+                        // Testnet xudt(final_rls)
+                        | "25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb" => {
+                            new_xudt_type_script_ids.push(_type_script_id);
+                        }
+                        // ------------
+                        // Unique Cell
+                        // Mainnet
+                        "0x2c8c11c985da60b0a330c61a85507416d6382c130ba67f0c47ab071e00aec628"
+                        // Testnet
+                        | "0x8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" => {
+                            new_unique_cells_data.push(row.4.clone());
+                        }
+                        // ------------
+                        // TODO: NFT Cell
+                        _ => {}
+                    };
+            }
+
+            _type_script_id
         } else {
             None
         };
@@ -299,6 +343,34 @@ pub(crate) async fn bulk_insert_output_table(
         ];
         new_rows.push(new_row);
     }
+
+    // xUDT metadata will be update if there are xUDT cell and Unique cell
+    // TODO: should check Unique Cell Data match xUDT metadata format define here https://github.com/ckb-cell/unique-cell
+    for index in 0..new_xudt_type_script_ids.len() {
+        let _type_script_id = *new_xudt_type_script_ids.get(index).unwrap();
+        // Check if the index xUDT metadata hasn't been set
+        let xudt_data = query_xudt_data(_type_script_id, tx).await?;
+        if xudt_data.is_none() {
+            if let Some(new_unique_cell_data) = new_unique_cells_data.pop() {
+                let new_udt_row: Vec<FieldValue> = vec![
+                    new_unique_cell_data.into(), // data
+                    1.into(),                    // xudt type
+                    _type_script_id.into(),      // type script id
+                ];
+                new_udt_rows.push(new_udt_row);
+            }
+        }
+    }
+
+    bulk_insert(
+        "udt",
+        &["data", "type", "type_script_id"],
+        &new_udt_rows,
+        None,
+        tx,
+    )
+    .await?;
+
     bulk_insert(
         "output",
         &[
@@ -486,6 +558,27 @@ pub(crate) async fn query_script_id(
     .await
     .map_err(|err| Error::DB(err.to_string()))
     .map(|row| row.map(|row| row.get::<i64, _>("id")))
+}
+
+async fn query_xudt_data(
+    type_script_id: i64,
+    tx: &mut Transaction<'_, Any>,
+) -> Result<Option<Vec<u8>>, Error> {
+    sqlx::query(
+        r#"
+        SELECT
+            data
+        FROM
+            udt
+        WHERE
+            type_script_id = $1
+        "#,
+    )
+    .bind(type_script_id)
+    .fetch_optional(tx)
+    .await
+    .map_err(|err| Error::DB(err.to_string()))
+    .map(|row| row.map(|row| row.get::<Vec<u8>, _>("data")))
 }
 
 pub(crate) async fn query_block_id(
