@@ -1,6 +1,7 @@
 mod get_cells;
 mod get_cells_capacity;
 mod get_transactions;
+mod get_udt_cells;
 
 use crate::indexer::to_fixed_array;
 use crate::store::SQLXPool;

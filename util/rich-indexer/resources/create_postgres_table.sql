@@ -81,7 +81,7 @@ CREATE TABLE udt(
     data BYTEA, -- decimal, name, symbol
     type SMALLINT NOT NULL, -- xudt or sudt
     type_script_id BIGINT, -- { args, code_hash, hash_type = type } (link to script table)
-    UNIQUE type_script_id
+    UNIQUE(type_script_id)
 );
 
 CREATE TABLE udt_output(

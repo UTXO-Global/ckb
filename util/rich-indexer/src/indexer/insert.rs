@@ -302,6 +302,7 @@ pub(crate) async fn bulk_insert_output_table(
                         "5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5"
                         // Testnet sudt
                         | "c5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4" => {
+                            log::debug!("sudt founded");
                             let new_udt_row: Vec<FieldValue> = vec![
                                 vec![].into(), // data
                                 0.into(), // sudt type
@@ -321,6 +322,7 @@ pub(crate) async fn bulk_insert_output_table(
                         "50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95" 
                         // Testnet xudt(final_rls)
                         | "25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb" => {
+                            log::debug!("xudt founded");
                             new_xudt_type_script_ids.push(_type_script_id);
                         }
                         // ------------
@@ -329,6 +331,7 @@ pub(crate) async fn bulk_insert_output_table(
                         "0x2c8c11c985da60b0a330c61a85507416d6382c130ba67f0c47ab071e00aec628"
                         // Testnet
                         | "0x8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" => {
+                            log::debug!("unique founded");
                             new_unique_cells_data.push(row.4.clone());
                         }
                         // ------------

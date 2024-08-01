@@ -71,6 +71,53 @@ pub trait RichIndexerRpc {
         after: Option<JsonBytes>,
     ) -> Result<IndexerPagination<IndexerCell>>;
 
+    /// Returns the live udt cells collection by the lock or type script.
+    ///
+    /// The difference from the original CKB Indexer is that the `script_search_mode` parameter accepts the `partial` enumeration value. This implies that a partial search can be conducted on the `args` of the `script`.
+    ///
+    /// ## Params
+    ///
+    /// * search_key:
+    ///     - script - Script, supports prefix search
+    ///     - script_type - enum, lock | type
+    ///     - script_search_mode - enum, prefix | exact | partial
+    ///     - filter - filter cells by following conditions, all conditions are optional
+    ///          - script: if search script type is lock, filter cells by type script prefix, and vice versa
+    ///          - script_len_range: [u64; 2], filter cells by script len range, [inclusive, exclusive]
+    ///          - output_data: filter cells by output data
+    ///          - output_data_filter_mode: enum, prefix | exact | partial
+    ///          - output_data_len_range: [u64; 2], filter cells by output data len range, [inclusive, exclusive]
+    ///          - output_capacity_range: [u64; 2], filter cells by output capacity range, [inclusive, exclusive]
+    ///          - block_range: [u64; 2], filter cells by block number range, [inclusive, exclusive]
+    ///     - with_data - bool, optional default is `true`, if with_data is set to false, the field of returning cell.output_data is null in the result
+    /// * order: enum, asc | desc
+    /// * limit: result size limit
+    /// * after: pagination parameter, optional
+    ///
+    /// ## Returns
+    ///
+    /// If the number of objects is less than the requested `limit`, it indicates that these are the last page of get_cells.
+    ///
+    /// * objects:
+    ///     - output: the fields of an output cell
+    ///     - output_data: the cell data
+    ///     - out_point: reference to a cell via transaction hash and output index
+    ///     - block_number: the number of the transaction committed in the block
+    ///     - tx_index: the position index of the transaction committed in the block
+    /// * last_cursor: pagination parameter
+    ///
+    /// ## Examples
+    ///
+    /// Same as CKB Indexer.
+    #[rpc(name = "get_udt_cells")]
+    async fn get_udt_cells(
+        &self,
+        search_key: IndexerSearchKey,
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerCell>>;
+
     /// Returns the transactions collection by the lock or type script.
     ///
     /// The difference from the original CKB Indexer is that both the `script_search_mode` and `output_data_filter_mode` in `filter` can accept the `partial` enumeration value. This implies that a partial search can be conducted on both the `args` of the `script` and the cell `output_data`.
@@ -186,6 +233,19 @@ impl RichIndexerRpc for RichIndexerRpcImpl {
     ) -> Result<IndexerPagination<IndexerCell>> {
         self.handle
             .get_cells(search_key, order, limit, after)
+            .await
+            .map_err(|e| RPCError::custom(RPCError::Indexer, e))
+    }
+
+    async fn get_udt_cells(
+        &self,
+        search_key: IndexerSearchKey,
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerCell>> {
+        self.handle
+            .get_udt_cells(search_key, order, limit, after)
             .await
             .map_err(|e| RPCError::custom(RPCError::Indexer, e))
     }
