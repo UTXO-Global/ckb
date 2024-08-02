@@ -379,7 +379,7 @@ pub(crate) async fn bulk_insert_output_table(
         "udt",
         &["data", "type", "type_script_id"],
         &new_udt_rows,
-        None,
+        Some(&["type_script_id"]),
         tx,
     )
     .await?;

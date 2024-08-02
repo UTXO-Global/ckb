@@ -77,11 +77,9 @@ CREATE TABLE script(
 );
 
 CREATE TABLE udt(
-    id BIGSERIAL PRIMARY KEY,
+    type_script_id BIGINT PRIMARY KEY,
     data BYTEA, -- decimal, name, symbol
-    type SMALLINT NOT NULL, -- xudt or sudt
-    type_script_id BIGINT, -- { args, code_hash, hash_type = type } (link to script table)
-    UNIQUE(type_script_id)
+    type SMALLINT NOT NULL -- xudt or sudt
 );
 
 CREATE TABLE udt_output(
