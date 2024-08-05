@@ -1,6 +1,6 @@
 #![allow(clippy::needless_borrow)]
 
-use super::to_fixed_array;
+use super::{to_fixed_array, types::SporeCellData};
 use crate::store::SQLXPool;
 
 use ckb_indexer_sync::Error;
@@ -285,6 +285,9 @@ pub(crate) async fn bulk_insert_output_table(
     let mut new_xudt_type_script_ids: Vec<i64> = Vec::new();
     let mut new_unique_cells_data: Vec<Vec<u8>> = Vec::new();
     let mut new_udt_outputs: Vec<Vec<FieldValue>> = Vec::new();
+    // NFT variables
+    let mut new_dob_rows: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_dob_outputs: Vec<Vec<FieldValue>> = Vec::new();
 
     for row in output_cell_rows {
         let type_script_id = if let Some(type_script) = &row.3 {
@@ -293,6 +296,7 @@ pub(crate) async fn bulk_insert_output_table(
 
             if let Some(_type_script_id) = _type_script_id {
                 let code_hash = type_script.0.clone();
+                let arg = &type_script.2.clone();
 
                 let code_hash_hex = hex::encode(&code_hash);
                 match code_hash_hex.as_str() {
@@ -302,7 +306,6 @@ pub(crate) async fn bulk_insert_output_table(
                         "5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5"
                         // Testnet sudt
                         | "c5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4" => {
-                            log::debug!("sudt founded");
                             let new_udt_row: Vec<FieldValue> = vec![
                                 vec![].into(), // data
                                 0.into(), // sudt type
@@ -322,7 +325,6 @@ pub(crate) async fn bulk_insert_output_table(
                         "50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95" 
                         // Testnet xudt(final_rls)
                         | "25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb" => {
-                            log::debug!("xudt founded");
                             new_xudt_type_script_ids.push(_type_script_id);
                         }
                         // ------------
@@ -331,12 +333,41 @@ pub(crate) async fn bulk_insert_output_table(
                         "0x2c8c11c985da60b0a330c61a85507416d6382c130ba67f0c47ab071e00aec628"
                         // Testnet
                         | "0x8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" => {
-                            log::debug!("unique founded");
                             new_unique_cells_data.push(row.4.clone());
                         }
                         // ------------
-                        // TODO: NFT Cell
-                        _ => {}
+                        // NFT Cell
+                        // DoB - Spore
+                        // Mainnet
+                        "0x4a4dce1df3dffff7f8b2cd7dff7303df3b6150c9788cb75dcf6747247132b9f5"
+                        // Testnet
+                        | "0x685a60219309029d01310311dba953d67029170ca4848a4ff638e57002130a0d"
+                        | "0x5e063b4c0e7abeaa6a428df3b693521a3050934cf3b0ae97a800d1bc31449398"
+                        | "0xbbad126377d45f90a8ee120da988a2d7332c78ba8fd679aab478a19d6c133494" => {
+                            let spore_id = arg;
+                            let reader = SporeCellData::from_slice(row.4.clone().as_slice());
+                            if let Ok(spore_cell_data) = reader {
+                                // spore_cell_data
+                                let new_dob_row: Vec<FieldValue> = vec![
+                                    spore_id.clone().into(), // spore_id
+                                    spore_cell_data.content_type().as_slice().to_vec().into(), // content type
+                                    spore_cell_data.content().as_slice().to_vec().into(), // content
+                                    spore_cell_data.cluster_id().as_slice().to_vec().into() // cluster id
+                                ];
+                                new_dob_rows.push(new_dob_row);
+
+                                let new_dob_output: Vec<FieldValue> = vec![
+                                    tx_id.into(), // tx_id
+                                    row.0.into(), // output_index
+                                    spore_id.clone().into(), // spore_id
+                                ];
+                                new_dob_outputs.push(new_dob_output);
+                            } else {
+                                log::error!("parse spore data failed")
+                            }
+                        }
+                        _ => {
+                        }
                     };
             }
 
@@ -375,6 +406,7 @@ pub(crate) async fn bulk_insert_output_table(
         }
     }
 
+    // UDT batch insert
     bulk_insert(
         "udt",
         &["data", "type", "type_script_id"],
@@ -388,6 +420,25 @@ pub(crate) async fn bulk_insert_output_table(
         "udt_output",
         &["tx_id", "output_index", "type_script_id", "amount"],
         &new_udt_outputs,
+        None,
+        tx,
+    )
+    .await?;
+
+    // NFT batch insert
+    bulk_insert(
+        "dob",
+        &["spore_id", "content_type", "content", "cluster_id"],
+        &new_dob_rows,
+        Some(&["spore_id"]),
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "dob_output",
+        &["tx_id", "output_index", "spore_id"],
+        &new_dob_outputs,
         None,
         tx,
     )

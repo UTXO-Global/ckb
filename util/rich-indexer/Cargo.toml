@@ -30,6 +30,8 @@ sqlx = { version = "0.6", features = [
     "postgres",
 ] }
 hex = "0.4"
+molecule = { version = "0.8", default-features = false }
+ckb-gen-types = { path = "../gen-types", version = "= 0.117.0-pre" }
 
 [dev-dependencies]
 hex = "0.4"

@@ -1,5 +1,6 @@
 mod insert;
 mod remove;
+mod types;
 
 pub(crate) use insert::*;
 pub(crate) use remove::*;
