@@ -1,6 +1,6 @@
 #![allow(clippy::needless_borrow)]
 
-use super::{to_fixed_array, types::SporeCellData};
+use super::{cluster_cell_data::ClusterCellData, spore_cell_data::SporeCellData, to_fixed_array};
 use crate::store::SQLXPool;
 
 use ckb_indexer_sync::Error;
@@ -288,6 +288,8 @@ pub(crate) async fn bulk_insert_output_table(
     // NFT variables
     let mut new_dob_rows: Vec<Vec<FieldValue>> = Vec::new();
     let mut new_dob_outputs: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_cluster_rows: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_cluster_outputs: Vec<Vec<FieldValue>> = Vec::new();
 
     for row in output_cell_rows {
         let type_script_id = if let Some(type_script) = &row.3 {
@@ -366,6 +368,34 @@ pub(crate) async fn bulk_insert_output_table(
                                 log::error!("parse spore data failed")
                             }
                         }
+                        // DoB - Cluster
+                        // https://github.com/sporeprotocol/spore-sdk/blob/83254c201f115c7bc4e3ac7638872a2ec4ca5671/packages/core/src/config/predefined.ts#L278
+                        // e.g: https://pudge.explorer.nervos.org/transaction/0xac022fb5ab51a86e6dc6d0a45cad1fd4f9d2e7aad5a862a5003ca0cb8c7b21ea
+                        // Mainnet
+                        "0x7366a61534fa7c7e6225ecc0d828ea3b5366adec2b58206f2ee84995fe030075" |
+                        // Testnet
+                        "0x0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" => {
+                            let cluster_id = arg;
+                            let reader = ClusterCellData::from_slice(row.4.clone().as_slice());
+                            if let Ok(cluster_cell_data) = reader {
+                                // cluster_cell_data
+                                let new_cluster_row: Vec<FieldValue> = vec![
+                                    cluster_id.clone().into(), // cluster_id
+                                    cluster_cell_data.name().as_slice().to_vec().into(), // name
+                                    cluster_cell_data.description().as_slice().to_vec().into(), // description
+                                ];
+                                new_cluster_rows.push(new_cluster_row);
+
+                                let new_cluster_output: Vec<FieldValue> = vec![
+                                    tx_id.into(), // tx_id
+                                    row.0.into(), // output_index
+                                    cluster_id.clone().into(), // cluster_id
+                                ];
+                                new_cluster_outputs.push(new_cluster_output);
+                            } else {
+                                log::error!("parse spore data failed")
+                            }
+                        }
                         _ => {
                         }
                     };
@@ -438,6 +468,24 @@ pub(crate) async fn bulk_insert_output_table(
     bulk_insert(
         "dob_output",
         &["tx_id", "output_index", "spore_id"],
+        &new_dob_outputs,
+        None,
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "cluster",
+        &["cluster_id", "name", "description"],
+        &new_dob_rows,
+        Some(&["cluster_id"]),
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "cluster_output",
+        &["tx_id", "output_index", "cluster_id"],
         &new_dob_outputs,
         None,
         tx,

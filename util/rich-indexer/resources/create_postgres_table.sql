@@ -89,3 +89,30 @@ CREATE TABLE udt_output(
     type_script_id BIGINT NOT NULL,
     amount BYTEA NOT NULL
 );
+
+CREATE TABLE dob(
+    spore_id BYTEA PRIMARY KEY,
+    content_type BYTEA NOT NULL,
+    content BYTEA NOT NULL,
+    cluster_id BYTEA NOT NULL
+);
+
+CREATE TABLE dob_output(
+    id BIGSERIAL PRIMARY KEY,
+    tx_id BIGINT NOT NULL,
+    output_index INTEGER NOT NULL,
+    spore_id BYTEA NOT NULL
+);
+
+CREATE TABLE cluster(
+    cluster_id BYTEA PRIMARY KEY,
+    name BYTEA NOT NULL,
+    description BYTEA NOT NULL
+);
+
+CREATE TABLE cluster_output(
+    id BIGSERIAL PRIMARY KEY,
+    tx_id BIGINT NOT NULL,
+    output_index INTEGER NOT NULL,
+    cluster_id BYTEA NOT NULL
+);
