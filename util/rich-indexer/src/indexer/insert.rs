@@ -315,11 +315,17 @@ pub(crate) async fn bulk_insert_output_table(
                             ];
                             new_udt_rows.push(new_udt_row);
 
+                            let udt_data = row.4.clone();
+                            let bytes = if udt_data.len() > 16 {
+                                16
+                            } else {
+                                udt_data.len()
+                            };
                             let new_udt_output: Vec<FieldValue> = vec![
                                 tx_id.into(), // tx_id
                                 row.0.into(), // output_index
                                 _type_script_id.into(), // type_script_id
-                                row.4.clone()[0..16].to_vec().into() // amount u128 - first 16 bytes, we cannot use bigint because of 8 bytes
+                                row.4.clone()[0..bytes].to_vec().into() // amount u128 - first 16 bytes, we cannot use bigint because of 8 bytes
                             ];
                             new_udt_outputs.push(new_udt_output);
                         }
