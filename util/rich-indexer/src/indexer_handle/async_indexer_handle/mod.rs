@@ -1,5 +1,7 @@
 mod get_cells;
 mod get_cells_capacity;
+mod get_dob_cells;
+mod get_dob_clusters;
 mod get_transactions;
 mod get_udt_cells;
 

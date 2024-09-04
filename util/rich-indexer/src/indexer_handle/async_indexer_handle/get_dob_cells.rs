@@ -5,8 +5,8 @@ use crate::store::SQLXPool;
 
 use ckb_indexer_sync::Error;
 use ckb_jsonrpc_types::{
-    IndexerCell, IndexerOrder, IndexerPagination, IndexerSearchKey, IndexerUdtCell, JsonBytes,
-    Uint32,
+    IndexerCell, IndexerDobCell, IndexerDobCluster, IndexerOrder, IndexerPagination,
+    IndexerSearchKey, JsonBytes, Uint32,
 };
 use ckb_jsonrpc_types::{IndexerScriptType, IndexerSearchMode};
 use ckb_types::packed::{CellOutputBuilder, OutPointBuilder, ScriptBuilder};
@@ -15,14 +15,14 @@ use sql_builder::{name, name::SqlName, SqlBuilder};
 use sqlx::{any::AnyRow, Row};
 
 impl AsyncRichIndexerHandle {
-    /// Get udt cells
-    pub async fn get_udt_cells(
+    /// Get dob cells
+    pub async fn get_dob_cells(
         &self,
         search_key: IndexerSearchKey,
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerUdtCell>, Error> {
+    ) -> Result<IndexerPagination<IndexerDobCell>, Error> {
         let limit = limit.value();
         if limit == 0 {
             return Err(Error::invalid_params("limit should be greater than 0"));
@@ -37,15 +37,36 @@ impl AsyncRichIndexerHandle {
             &mut param_index,
         )?;
 
-        // query udt output
+        // query dob output
         let mut query_builder = SqlBuilder::select_from("output");
 
-        query_builder.join("udt_output").on(
-            "output.tx_id = udt_output.tx_id AND output.output_index = udt_output.output_index",
+        query_builder.join("dob_output").on(
+            "output.tx_id = dob_output.tx_id AND output.output_index = dob_output.output_index",
         );
+        query_builder
+            .left()
+            .join("dob")
+            .on("dob_output.spore_id = dob.spore_id");
+
+        // optional cluster
+        query_builder
+            .left()
+            .join("cluster")
+            .on("dob.cluster_id = cluster.cluster_id");
 
         query_builder
-            .field("udt_output.amount")
+            .left()
+            .join("cluster_output")
+            .on("dob.cluster_id = cluster_output.cluster_id");
+
+        query_builder
+            .field("dob.content_type")
+            .field("dob.content")
+            .field("dob.cluster_id")
+            .field("cluster.name AS cluster_name")
+            .field("cluster.description AS cluster_description")
+            .field("cluster_output.tx_id AS cluster_tx_id")
+            .field("cluster_output.output_index AS cluster_output_index")
             .field("output.id")
             .field("output.output_index")
             .field("output.capacity");
@@ -248,7 +269,7 @@ impl AsyncRichIndexerHandle {
     }
 }
 
-fn build_indexer_cell(row: &AnyRow) -> IndexerUdtCell {
+fn build_indexer_cell(row: &AnyRow) -> IndexerDobCell {
     let out_point = OutPointBuilder::default()
         .tx_hash(to_fixed_array::<32>(&row.get::<Vec<u8>, _>("tx_hash")).pack())
         .index((row.get::<i32, _>("output_index") as u32).pack())
@@ -273,9 +294,22 @@ fn build_indexer_cell(row: &AnyRow) -> IndexerUdtCell {
         .lock(lock_script)
         .type_(type_script.pack())
         .build();
-    let udt_amount = row.get::<i64, _>("capacity") as u64;
 
-    IndexerUdtCell {
+    let cluster = match row.get::<Option<Vec<u8>>, _>("cluster_id") {
+        Some(cluster_id) => Some(IndexerDobCluster {
+            id: JsonBytes::from_vec(cluster_id),
+            name: JsonBytes::from_vec(row.get::<Vec<u8>, _>("cluster_name").to_vec()),
+            description: JsonBytes::from_vec(row.get::<Vec<u8>, _>("cluster_description").to_vec()),
+            out_point: OutPointBuilder::default()
+                .tx_hash(to_fixed_array::<32>(&row.get::<Vec<u8>, _>("cluster_tx_id")).pack())
+                .index((row.get::<i32, _>("cluster_output_index") as u32).pack())
+                .build()
+                .into(),
+        }),
+        None => None,
+    };
+
+    IndexerDobCell {
         live_cell: IndexerCell {
             output: output.into(),
             output_data: row
@@ -285,6 +319,8 @@ fn build_indexer_cell(row: &AnyRow) -> IndexerUdtCell {
             block_number: (row.get::<i64, _>("block_number") as u64).into(),
             tx_index: (row.get::<i32, _>("tx_index") as u32).into(),
         },
-        amount: udt_amount.into(),
+        content_type: JsonBytes::from_vec(row.get::<Vec<u8>, _>("content_type").to_vec()),
+        content: JsonBytes::from_vec(row.get::<Vec<u8>, _>("content").to_vec()),
+        cluster,
     }
 }

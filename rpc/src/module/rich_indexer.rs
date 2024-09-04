@@ -1,8 +1,8 @@
 use crate::error::RPCError;
 use async_trait::async_trait;
 use ckb_jsonrpc_types::{
-    IndexerCell, IndexerCellsCapacity, IndexerOrder, IndexerPagination, IndexerSearchKey,
-    IndexerTip, IndexerTx, JsonBytes, Uint32,
+    IndexerCell, IndexerCellsCapacity, IndexerDobCell, IndexerDobCluster, IndexerOrder,
+    IndexerPagination, IndexerSearchKey, IndexerTip, IndexerTx, IndexerUdtCell, JsonBytes, Uint32,
 };
 use ckb_rich_indexer::AsyncRichIndexerHandle;
 use jsonrpc_core::Result;
@@ -116,7 +116,24 @@ pub trait RichIndexerRpc {
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerCell>>;
+    ) -> Result<IndexerPagination<IndexerUdtCell>>;
+
+    #[rpc(name = "get_dob_cells")]
+    async fn get_dob_cells(
+        &self,
+        search_key: IndexerSearchKey,
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerDobCell>>;
+
+    #[rpc(name = "get_dob_clusters")]
+    async fn get_dob_clusters(
+        &self,
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerDobCluster>>;
 
     /// Returns the transactions collection by the lock or type script.
     ///
@@ -243,9 +260,34 @@ impl RichIndexerRpc for RichIndexerRpcImpl {
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerCell>> {
+    ) -> Result<IndexerPagination<IndexerUdtCell>> {
         self.handle
             .get_udt_cells(search_key, order, limit, after)
+            .await
+            .map_err(|e| RPCError::custom(RPCError::Indexer, e))
+    }
+
+    async fn get_dob_cells(
+        &self,
+        search_key: IndexerSearchKey,
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerDobCell>> {
+        self.handle
+            .get_dob_cells(search_key, order, limit, after)
+            .await
+            .map_err(|e| RPCError::custom(RPCError::Indexer, e))
+    }
+
+    async fn get_dob_clusters(
+        &self,
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerDobCluster>> {
+        self.handle
+            .get_dob_cluters(order, limit, after)
             .await
             .map_err(|e| RPCError::custom(RPCError::Indexer, e))
     }

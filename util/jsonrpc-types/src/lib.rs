@@ -54,9 +54,10 @@ pub use self::subscription::Topic;
 pub use self::uints::{Uint128, Uint32, Uint64};
 pub use ckb_types::core::RationalU256;
 pub use indexer::{
-    IndexerCell, IndexerCellType, IndexerCellsCapacity, IndexerOrder, IndexerPagination,
-    IndexerRange, IndexerScriptType, IndexerSearchKey, IndexerSearchKeyFilter, IndexerSearchMode,
-    IndexerTip, IndexerTx, IndexerTxWithCell, IndexerTxWithCells,
+    IndexerCell, IndexerCellType, IndexerCellsCapacity, IndexerDobCell, IndexerDobCluster,
+    IndexerOrder, IndexerPagination, IndexerRange, IndexerScriptType, IndexerSearchKey,
+    IndexerSearchKeyFilter, IndexerSearchMode, IndexerTip, IndexerTx, IndexerTxWithCell,
+    IndexerTxWithCells, IndexerUdtCell,
 };
 pub use primitive::{
     AsEpochNumberWithFraction, BlockNumber, Capacity, Cycle, EpochNumber, EpochNumberWithFraction,

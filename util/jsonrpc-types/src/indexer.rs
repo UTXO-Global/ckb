@@ -261,3 +261,27 @@ pub enum IndexerCellType {
     /// Output
     Output,
 }
+
+/// UDT cell
+#[derive(Serialize, JsonSchema)]
+pub struct IndexerUdtCell {
+    pub live_cell: IndexerCell,
+    pub amount: Uint64,
+}
+
+/// DOB cell
+#[derive(Serialize, JsonSchema)]
+pub struct IndexerDobCluster {
+    pub id: JsonBytes,
+    pub name: JsonBytes,
+    pub description: JsonBytes,
+    pub out_point: OutPoint,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct IndexerDobCell {
+    pub live_cell: IndexerCell,
+    pub content_type: JsonBytes,
+    pub content: JsonBytes,
+    pub cluster: Option<IndexerDobCluster>,
+}
