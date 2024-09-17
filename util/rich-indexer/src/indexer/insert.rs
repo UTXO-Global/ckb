@@ -86,35 +86,8 @@ pub(crate) async fn append_block(
     tx: &mut Transaction<'_, Any>,
 ) -> Result<i64, Error> {
     // insert "uncle" first so that the row with the maximum ID in the "block" table corresponds to the tip block.
-    let uncle_id_list = insert_uncle_blocks(block_view, tx).await?;
     let block_id = insert_block_table(block_view, tx).await?;
-    insert_block_proposals(block_id, block_view, tx).await?;
-    bulk_insert_block_association_uncle_table(block_id, &uncle_id_list, tx).await?;
     Ok(block_id)
-}
-
-pub(crate) async fn insert_uncle_blocks(
-    block_view: &BlockView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<Vec<i64>, Error> {
-    let uncle_blocks = block_view
-        .uncles()
-        .into_iter()
-        .map(|uncle| {
-            let uncle_block_header = uncle.header();
-            BlockView::new_advanced_builder()
-                .header(uncle_block_header)
-                .proposals(uncle.data().proposals())
-                .build()
-        })
-        .collect::<Vec<_>>();
-    let uncle_block_rows: Vec<Vec<FieldValue>> = uncle_blocks
-        .iter()
-        .map(block_view_to_field_values)
-        .collect();
-    let uncle_id_list = bulk_insert_block_table(&uncle_block_rows, tx).await?;
-    insert_blocks_proposals(&uncle_id_list, &uncle_blocks, tx).await?;
-    Ok(uncle_id_list)
 }
 
 async fn insert_block_table(
@@ -127,42 +100,6 @@ async fn insert_block_table(
         .map(|ids| ids[0])
 }
 
-async fn insert_blocks_proposals(
-    block_id_list: &[i64],
-    block_views: &[BlockView],
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let block_association_proposal_rows: Vec<_> = block_id_list
-        .iter()
-        .zip(block_views)
-        .flat_map(|(block_id, block_view)| {
-            block_view
-                .data()
-                .proposals()
-                .into_iter()
-                .map(move |proposal_hash| {
-                    vec![(*block_id).into(), proposal_hash.raw_data().to_vec().into()]
-                })
-        })
-        .collect();
-
-    bulk_insert_block_association_proposal_table(&block_association_proposal_rows, tx).await
-}
-
-async fn insert_block_proposals(
-    block_id: i64,
-    block_view: &BlockView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let block_association_proposal_rows: Vec<_> = block_view
-        .data()
-        .proposals()
-        .into_iter()
-        .map(move |proposal_hash| vec![block_id.into(), proposal_hash.raw_data().to_vec().into()])
-        .collect();
-    bulk_insert_block_association_proposal_table(&block_association_proposal_rows, tx).await
-}
-
 pub(crate) async fn insert_transaction_table(
     block_id: i64,
     tx_index: usize,
@@ -171,24 +108,12 @@ pub(crate) async fn insert_transaction_table(
 ) -> Result<i64, Error> {
     let tx_row = vec![
         tx_view.hash().raw_data().to_vec().into(),
-        tx_view.version().to_be_bytes().to_vec().into(),
-        (tx_view.inputs().len() as i32).into(),
-        (tx_view.outputs().len() as i32).into(),
-        tx_view.witnesses().as_bytes().to_vec().into(),
         block_id.into(),
         (tx_index as i32).into(),
     ];
     bulk_insert_and_return_ids(
         "ckb_transaction",
-        &[
-            "tx_hash",
-            "version",
-            "input_count",
-            "output_count",
-            "witnesses",
-            "block_id",
-            "tx_index",
-        ],
+        &["tx_hash", "block_id", "tx_index"],
         &[tx_row],
         tx,
     )
@@ -218,60 +143,7 @@ async fn bulk_insert_block_table(
     block_rows: &[Vec<FieldValue>],
     tx: &mut Transaction<'_, Any>,
 ) -> Result<Vec<i64>, Error> {
-    bulk_insert_and_return_ids(
-        "block",
-        &[
-            "block_hash",
-            "block_number",
-            "compact_target",
-            "parent_hash",
-            "nonce",
-            "timestamp",
-            "version",
-            "transactions_root",
-            "epoch",
-            "dao",
-            "proposals_hash",
-            "extra_hash",
-            "extension",
-        ],
-        block_rows,
-        tx,
-    )
-    .await
-}
-
-async fn bulk_insert_block_association_proposal_table(
-    block_association_proposal_rows: &[Vec<FieldValue>],
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    bulk_insert(
-        "block_association_proposal",
-        &["block_id", "proposal"],
-        &block_association_proposal_rows,
-        None,
-        tx,
-    )
-    .await
-}
-
-async fn bulk_insert_block_association_uncle_table(
-    block_id: i64,
-    uncle_id_list: &[i64],
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let block_association_uncle_rows: Vec<_> = uncle_id_list
-        .iter()
-        .map(|uncle_id| vec![block_id.into(), (*uncle_id).into()])
-        .collect();
-    bulk_insert(
-        "block_association_uncle",
-        &["block_id", "uncle_id"],
-        &block_association_uncle_rows,
-        None,
-        tx,
-    )
-    .await
+    bulk_insert_and_return_ids("block", &["block_hash", "block_number"], block_rows, tx).await
 }
 
 pub(crate) async fn bulk_insert_output_table(
@@ -292,6 +164,8 @@ pub(crate) async fn bulk_insert_output_table(
     let mut new_cluster_outputs: Vec<Vec<FieldValue>> = Vec::new();
 
     for row in output_cell_rows {
+        let mut should_save_output = true;
+
         let type_script_id = if let Some(type_script) = &row.3 {
             let _type_script_id =
                 query_script_id(&type_script.0, type_script.1, &type_script.2, tx).await?;
@@ -324,7 +198,6 @@ pub(crate) async fn bulk_insert_output_table(
                             let new_udt_output: Vec<FieldValue> = vec![
                                 tx_id.into(), // tx_id
                                 row.0.into(), // output_index
-                                _type_script_id.into(), // type_script_id
                                 row.4.clone()[0..bytes].to_vec().into() // amount u128 - first 16 bytes, we cannot use bigint because of 8 bytes
                             ];
                             new_udt_outputs.push(new_udt_output);
@@ -403,25 +276,30 @@ pub(crate) async fn bulk_insert_output_table(
                             }
                         }
                         _ => {
+                            should_save_output = false;
                         }
                     };
             }
 
             _type_script_id
         } else {
+            should_save_output = false;
             None
         };
-        let new_row = vec![
-            tx_id.into(),
-            row.0.into(),
-            row.1.into(),
-            query_script_id(&row.2 .0, row.2 .1, &row.2 .2, tx)
-                .await?
-                .map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
-            type_script_id.map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
-            row.4.into(),
-        ];
-        new_rows.push(new_row);
+
+        if should_save_output {
+            let new_row = vec![
+                tx_id.into(),
+                row.0.into(),
+                row.1.into(),
+                query_script_id(&row.2 .0, row.2 .1, &row.2 .2, tx)
+                    .await?
+                    .map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
+                type_script_id.map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
+                row.4.into(),
+            ];
+            new_rows.push(new_row);
+        }
     }
 
     // xUDT metadata will be update if there are xUDT cell and Unique cell
@@ -454,7 +332,7 @@ pub(crate) async fn bulk_insert_output_table(
 
     bulk_insert(
         "udt_output",
-        &["tx_id", "output_index", "type_script_id", "amount"],
+        &["tx_id", "output_index", "amount"],
         &new_udt_outputs,
         None,
         tx,
@@ -548,52 +426,6 @@ pub(crate) async fn bulk_insert_script_table(
         &["code_hash", "hash_type", "args"],
         &script_rows,
         Some(&["code_hash", "hash_type", "args"]),
-        tx,
-    )
-    .await
-}
-
-pub(crate) async fn bulk_insert_tx_association_header_dep_table(
-    tx_id: i64,
-    tx_view: &TransactionView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let mut tx_association_header_dep_rows = Vec::new();
-    for header_dep in tx_view.header_deps_iter() {
-        if let Some(block_id) = query_block_id(&header_dep.raw_data(), tx).await? {
-            tx_association_header_dep_rows.push(vec![tx_id.into(), block_id.into()]);
-        }
-    }
-    bulk_insert(
-        "tx_association_header_dep",
-        &["tx_id", "block_id"],
-        &tx_association_header_dep_rows,
-        None,
-        tx,
-    )
-    .await
-}
-
-pub(crate) async fn bulk_insert_tx_association_cell_dep_table(
-    tx_id: i64,
-    tx_view: &TransactionView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let mut tx_association_cell_dep_rows = Vec::new();
-    for cell_dep in tx_view.cell_deps_iter() {
-        if let Some(output_id) = query_output_id(&cell_dep.out_point(), tx).await? {
-            tx_association_cell_dep_rows.push(vec![
-                tx_id.into(),
-                output_id.into(),
-                (u8::from(cell_dep.dep_type()) as i16).into(),
-            ]);
-        }
-    }
-    bulk_insert(
-        "tx_association_cell_dep",
-        &["tx_id", "output_id", "dep_type"],
-        &tx_association_cell_dep_rows,
-        None,
         tx,
     )
     .await
@@ -706,26 +538,6 @@ async fn query_xudt_data(
     .await
     .map_err(|err| Error::DB(err.to_string()))
     .map(|row| row.map(|row| row.get::<Vec<u8>, _>("data")))
-}
-
-pub(crate) async fn query_block_id(
-    block_hash: &[u8],
-    tx: &mut Transaction<'_, Any>,
-) -> Result<Option<i64>, Error> {
-    sqlx::query(
-        r#"
-        SELECT id
-        FROM
-            block
-        WHERE
-            block_hash = $1
-        "#,
-    )
-    .bind(block_hash)
-    .fetch_optional(tx)
-    .await
-    .map_err(|err| Error::DB(err.to_string()))
-    .map(|row| row.map(|row| row.get::<i64, _>("id")))
 }
 
 pub(crate) fn build_output_cell_rows(
@@ -923,24 +735,5 @@ fn block_view_to_field_values(block_view: &BlockView) -> Vec<FieldValue> {
     vec![
         block_view.hash().raw_data().to_vec().into(),
         (block_view.number() as i64).into(),
-        block_view.compact_target().to_be_bytes().to_vec().into(),
-        block_view.parent_hash().raw_data().to_vec().into(),
-        block_view.nonce().to_be_bytes().to_vec().into(),
-        (block_view.timestamp() as i64).into(),
-        block_view.version().to_be_bytes().to_vec().into(),
-        block_view.transactions_root().raw_data().to_vec().into(),
-        block_view
-            .epoch()
-            .full_value()
-            .to_be_bytes()
-            .to_vec()
-            .into(),
-        block_view.dao().raw_data().to_vec().into(),
-        block_view.proposals_hash().raw_data().to_vec().into(),
-        block_view.extra_hash().raw_data().to_vec().into(),
-        match block_view.data().extension() {
-            Some(extension) => extension.raw_data().to_vec().into(),
-            None => Vec::new().into(),
-        },
     ]
 }

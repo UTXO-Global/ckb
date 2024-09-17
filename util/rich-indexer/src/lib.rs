@@ -8,9 +8,3 @@ mod store;
 
 pub use indexer_handle::{AsyncRichIndexerHandle, RichIndexerHandle};
 pub use service::RichIndexerService;
-
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-pub(crate) use indexer::AsyncRichIndexer;
