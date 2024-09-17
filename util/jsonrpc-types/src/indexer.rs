@@ -266,7 +266,7 @@ pub enum IndexerCellType {
 #[derive(Serialize, JsonSchema)]
 pub struct IndexerUdtCell {
     pub live_cell: IndexerCell,
-    pub amount: Uint64,
+    pub amount: JsonBytes,
 }
 
 /// DOB cell
