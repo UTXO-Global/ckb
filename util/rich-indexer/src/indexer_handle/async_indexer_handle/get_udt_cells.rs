@@ -273,7 +273,7 @@ fn build_indexer_cell(row: &AnyRow) -> IndexerUdtCell {
         .lock(lock_script)
         .type_(type_script.pack())
         .build();
-    let udt_amount = row.get::<i64, _>("capacity") as u64;
+    let udt_amount = row.get::<i64, _>("amount") as u64;
 
     IndexerUdtCell {
         live_cell: IndexerCell {
