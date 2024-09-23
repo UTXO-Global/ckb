@@ -16,8 +16,6 @@ pub(crate) async fn rollback_block(tx: &mut Transaction<'_, Any>) -> Result<(), 
 
     // remove transactions, associations, inputs, output
     remove_batch_by_blobs("ckb_transaction", "id", &tx_id_list, tx).await?;
-    remove_batch_by_blobs("tx_association_cell_dep", "tx_id", &tx_id_list, tx).await?;
-    remove_batch_by_blobs("tx_association_header_dep", "tx_id", &tx_id_list, tx).await?;
     remove_batch_by_blobs("input", "consumed_tx_id", &tx_id_list, tx).await?;
     remove_batch_by_blobs("output", "tx_id", &tx_id_list, tx).await?;
 
