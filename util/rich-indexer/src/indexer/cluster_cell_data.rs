@@ -1,5 +1,5 @@
 use ckb_gen_types::packed::Bytes;
-use ckb_types::packed::{Byte32OptReader, BytesReader};
+use ckb_types::packed::{Byte32Opt, Byte32OptReader, BytesReader};
 use molecule::prelude::{Entity, Reader};
 
 #[derive(Clone)]
@@ -23,6 +23,7 @@ impl ::core::fmt::Display for ClusterCellData {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "name", self.name())?;
         write!(f, ", {}: {}", "description", self.description())?;
+        write!(f, ", {}: {}", "mutant_id", self.mutant_id())?;
         write!(f, " }}")
     }
 }
@@ -56,6 +57,11 @@ impl ClusterCellData {
         let end = molecule::unpack_number(&slice[12..]) as usize;
         Bytes::new_unchecked(self.0.slice(start..end))
     }
+    pub fn mutant_id(&self) -> Byte32Opt {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32Opt::new_unchecked(self.0.slice(start..))
+    }
 }
 impl molecule::prelude::Entity for ClusterCellData {
     type Builder = ClusterCellDataBuilder;
@@ -82,6 +88,7 @@ impl molecule::prelude::Entity for ClusterCellData {
         Self::new_builder()
             .name(self.name())
             .description(self.description())
+            .mutant_id(self.mutant_id())
     }
 }
 #[derive(Clone, Copy)]
@@ -105,11 +112,12 @@ impl<'r> ::core::fmt::Display for ClusterCellDataReader<'r> {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "name", self.name())?;
         write!(f, ", {}: {}", "description", self.description())?;
+        write!(f, ", {}: {}", "mutant_id", self.mutant_id())?;
         write!(f, " }}")
     }
 }
 impl<'r> ClusterCellDataReader<'r> {
-    pub const FIELD_COUNT: usize = 2;
+    pub const FIELD_COUNT: usize = 3;
     pub fn name(&self) -> BytesReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
@@ -121,6 +129,11 @@ impl<'r> ClusterCellDataReader<'r> {
         let start = molecule::unpack_number(&slice[8..]) as usize;
         let end = molecule::unpack_number(&slice[12..]) as usize;
         BytesReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn mutant_id(&self) -> Byte32OptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[12..]) as usize;
+        Byte32OptReader::new_unchecked(&self.as_slice()[start..])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for ClusterCellDataReader<'r> {
@@ -179,6 +192,7 @@ impl<'r> molecule::prelude::Reader<'r> for ClusterCellDataReader<'r> {
 pub struct ClusterCellDataBuilder {
     pub(crate) name: Bytes,
     pub(crate) description: Bytes,
+    pub(crate) mutant_id: Byte32Opt,
 }
 impl ClusterCellDataBuilder {
     pub const FIELD_COUNT: usize = 2;
@@ -188,6 +202,10 @@ impl ClusterCellDataBuilder {
     }
     pub fn description(mut self, v: Bytes) -> Self {
         self.description = v;
+        self
+    }
+    pub fn mutant_id(mut self, v: Byte32Opt) -> Self {
+        self.mutant_id = v;
         self
     }
 }

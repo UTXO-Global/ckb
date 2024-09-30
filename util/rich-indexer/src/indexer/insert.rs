@@ -205,7 +205,8 @@ pub(crate) async fn bulk_insert_output_table(
                         // Mainnet + Testnet xudt
                         "50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95" 
                         // Testnet xudt(final_rls)
-                        | "25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb" => {
+                        | "25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb" // block: 8,497,330
+                        => {
                             new_xudt_type_script_ids.push(_type_script_id);
                         }
                         // ------------
@@ -213,7 +214,8 @@ pub(crate) async fn bulk_insert_output_table(
                         // Mainnet
                         "2c8c11c985da60b0a330c61a85507416d6382c130ba67f0c47ab071e00aec628"
                         // Testnet
-                        | "8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" => {
+                        | "8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" // block: 12,737,020
+                        => {
                             new_unique_cells_data.push(row.4.clone());
                         }
                         // ------------
@@ -222,9 +224,10 @@ pub(crate) async fn bulk_insert_output_table(
                         // Mainnet
                         "4a4dce1df3dffff7f8b2cd7dff7303df3b6150c9788cb75dcf6747247132b9f5"
                         // Testnet
-                        | "685a60219309029d01310311dba953d67029170ca4848a4ff638e57002130a0d"
-                        | "5e063b4c0e7abeaa6a428df3b693521a3050934cf3b0ae97a800d1bc31449398"
-                        | "bbad126377d45f90a8ee120da988a2d7332c78ba8fd679aab478a19d6c133494" => {
+                        | "685a60219309029d01310311dba953d67029170ca4848a4ff638e57002130a0d" // block: 12,606,776
+                        | "5e063b4c0e7abeaa6a428df3b693521a3050934cf3b0ae97a800d1bc31449398" // block: 11,994,104
+                        | "bbad126377d45f90a8ee120da988a2d7332c78ba8fd679aab478a19d6c133494" // block: 10,228,288
+                        => {
                             let spore_id = arg;
                             let reader = SporeCellData::from_slice(row.4.clone().as_slice());
                             if let Ok(spore_cell_data) = reader {
@@ -249,11 +252,13 @@ pub(crate) async fn bulk_insert_output_table(
                         }
                         // DoB - Cluster
                         // https://github.com/sporeprotocol/spore-sdk/blob/83254c201f115c7bc4e3ac7638872a2ec4ca5671/packages/core/src/config/predefined.ts#L278
+                        // https://github.com/nervosnetwork/ckb-explorer-frontend/blob/1c21cd5c1f11509f2a4fedf8503bc0a9e1276709/src/utils/spore.ts#L5
                         // e.g: https://pudge.explorer.nervos.org/transaction/0xac022fb5ab51a86e6dc6d0a45cad1fd4f9d2e7aad5a862a5003ca0cb8c7b21ea
                         // Mainnet
                         "7366a61534fa7c7e6225ecc0d828ea3b5366adec2b58206f2ee84995fe030075" |
                         // Testnet
-                        "0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" => {
+                        "0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" // block: 12,606,811
+                        => {
                             let cluster_id = arg;
                             let reader = ClusterCellData::from_slice(row.4.clone().as_slice());
                             if let Ok(cluster_cell_data) = reader {
@@ -272,7 +277,7 @@ pub(crate) async fn bulk_insert_output_table(
                                 ];
                                 new_cluster_outputs.push(new_cluster_output);
                             } else {
-                                log::error!("parse spore data failed")
+                                log::error!("parse cluster data failed")
                             }
                         }
                         _ => {
@@ -406,7 +411,7 @@ pub(crate) async fn bulk_insert_input_table(
         "input",
         &["output_id", "since", "consumed_tx_id", "input_index"],
         &input_rows,
-        None,
+        Some(&["output_id"]),
         tx,
     )
     .await
