@@ -211,20 +211,20 @@ pub(crate) async fn bulk_insert_output_table(
                         // ------------
                         // Unique Cell
                         // Mainnet
-                        "0x2c8c11c985da60b0a330c61a85507416d6382c130ba67f0c47ab071e00aec628"
+                        "2c8c11c985da60b0a330c61a85507416d6382c130ba67f0c47ab071e00aec628"
                         // Testnet
-                        | "0x8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" => {
+                        | "8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" => {
                             new_unique_cells_data.push(row.4.clone());
                         }
                         // ------------
                         // NFT Cell
                         // DoB - Spore
                         // Mainnet
-                        "0x4a4dce1df3dffff7f8b2cd7dff7303df3b6150c9788cb75dcf6747247132b9f5"
+                        "4a4dce1df3dffff7f8b2cd7dff7303df3b6150c9788cb75dcf6747247132b9f5"
                         // Testnet
-                        | "0x685a60219309029d01310311dba953d67029170ca4848a4ff638e57002130a0d"
-                        | "0x5e063b4c0e7abeaa6a428df3b693521a3050934cf3b0ae97a800d1bc31449398"
-                        | "0xbbad126377d45f90a8ee120da988a2d7332c78ba8fd679aab478a19d6c133494" => {
+                        | "685a60219309029d01310311dba953d67029170ca4848a4ff638e57002130a0d"
+                        | "5e063b4c0e7abeaa6a428df3b693521a3050934cf3b0ae97a800d1bc31449398"
+                        | "bbad126377d45f90a8ee120da988a2d7332c78ba8fd679aab478a19d6c133494" => {
                             let spore_id = arg;
                             let reader = SporeCellData::from_slice(row.4.clone().as_slice());
                             if let Ok(spore_cell_data) = reader {
@@ -251,9 +251,9 @@ pub(crate) async fn bulk_insert_output_table(
                         // https://github.com/sporeprotocol/spore-sdk/blob/83254c201f115c7bc4e3ac7638872a2ec4ca5671/packages/core/src/config/predefined.ts#L278
                         // e.g: https://pudge.explorer.nervos.org/transaction/0xac022fb5ab51a86e6dc6d0a45cad1fd4f9d2e7aad5a862a5003ca0cb8c7b21ea
                         // Mainnet
-                        "0x7366a61534fa7c7e6225ecc0d828ea3b5366adec2b58206f2ee84995fe030075" |
+                        "7366a61534fa7c7e6225ecc0d828ea3b5366adec2b58206f2ee84995fe030075" |
                         // Testnet
-                        "0x0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" => {
+                        "0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" => {
                             let cluster_id = arg;
                             let reader = ClusterCellData::from_slice(row.4.clone().as_slice());
                             if let Ok(cluster_cell_data) = reader {
@@ -361,7 +361,7 @@ pub(crate) async fn bulk_insert_output_table(
     bulk_insert(
         "cluster",
         &["cluster_id", "name", "description"],
-        &new_dob_rows,
+        &new_cluster_rows,
         Some(&["cluster_id"]),
         tx,
     )
@@ -370,7 +370,7 @@ pub(crate) async fn bulk_insert_output_table(
     bulk_insert(
         "cluster_output",
         &["tx_id", "output_index", "cluster_id"],
-        &new_dob_outputs,
+        &new_cluster_outputs,
         None,
         tx,
     )
