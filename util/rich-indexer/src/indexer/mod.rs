@@ -39,6 +39,7 @@ use std::sync::{Arc, RwLock};
 pub(crate) struct RichIndexer {
     async_rich_indexer: AsyncRichIndexer,
     async_runtime: Handle,
+    request_limit: usize,
 }
 
 impl RichIndexer {
@@ -48,10 +49,12 @@ impl RichIndexer {
         pool: Option<Arc<RwLock<Pool>>>,
         custom_filters: CustomFilters,
         async_runtime: Handle,
+        request_limit: usize,
     ) -> Self {
         Self {
             async_rich_indexer: AsyncRichIndexer::new(store, pool, custom_filters),
             async_runtime,
+            request_limit,
         }
     }
 }
@@ -63,6 +66,7 @@ impl IndexerSync for RichIndexer {
             self.async_rich_indexer.store.clone(),
             self.async_rich_indexer.pool.clone(),
             self.async_runtime.clone(),
+            self.request_limit,
         );
         indexer_handle
             .get_indexer_tip()
@@ -194,6 +198,9 @@ impl AsyncRichIndexer {
         if tx_index != 0 {
             for (input_index, input) in tx_view.inputs().into_iter().enumerate() {
                 let out_point = input.previous_output();
+                if !spend_cell(&out_point, tx).await? {
+                    break;
+                }
                 if self.custom_filters.is_cell_filter_enabled() {
                     if let Some((output_id, output, output_data)) =
                         query_output_cell(&out_point, tx).await?

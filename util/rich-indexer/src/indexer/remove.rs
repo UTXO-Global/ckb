@@ -14,6 +14,9 @@ pub(crate) async fn rollback_block(tx: &mut Transaction<'_, Any>) -> Result<(), 
     let tx_id_list = query_tx_id_list_by_block_id(block_id, tx).await?;
     let output_lock_type_list = query_outputs_by_tx_id_list(&tx_id_list, tx).await?;
 
+    // update spent cells
+    reset_spent_cells(&tx_id_list, tx).await?;
+
     // remove transactions, associations, inputs, output
     remove_batch_by_blobs("ckb_transaction", "id", &tx_id_list, tx).await?;
     remove_batch_by_blobs("input", "consumed_tx_id", &tx_id_list, tx).await?;
@@ -64,7 +67,29 @@ async fn remove_batch_by_blobs(
 
     // execute
     query
-        .execute(tx)
+        .execute(tx.as_mut())
+        .await
+        .map_err(|err| Error::DB(err.to_string()))?;
+
+    Ok(())
+}
+
+async fn reset_spent_cells(tx_id_list: &[i64], tx: &mut Transaction<'_, Any>) -> Result<(), Error> {
+    let query = SqlBuilder::update_table("output")
+        .set("is_spent", 0)
+        .and_where_in_query(
+            "id",
+            SqlBuilder::select_from("input")
+                .field("output_id")
+                .and_where_in("consumed_tx_id", tx_id_list)
+                .query()
+                .map_err(|err| Error::DB(err.to_string()))?,
+        )
+        .sql()
+        .map_err(|err| Error::DB(err.to_string()))?;
+
+    sqlx::query(&query)
+        .execute(tx.as_mut())
         .await
         .map_err(|err| Error::DB(err.to_string()))?;
 
@@ -79,7 +104,7 @@ async fn query_tip_id(tx: &mut Transaction<'_, Any>) -> Result<Option<i64>, Erro
             LIMIT 1
             "#,
     )
-    .fetch_optional(tx)
+    .fetch_optional(tx.as_mut())
     .await
     .map(|res| res.map(|row| row.get::<i64, _>("id")))
     .map_err(|err| Error::DB(err.to_string()))
@@ -98,7 +123,7 @@ async fn query_tx_id_list_by_block_id(
         "#,
     )
     .bind(block_id)
-    .fetch_all(tx)
+    .fetch_all(tx.as_mut())
     .await
     .map(|rows| {
         rows.into_iter()
@@ -133,7 +158,7 @@ async fn query_outputs_by_tx_id_list(
 
     // execute
     query
-        .fetch_all(&mut *tx)
+        .fetch_all(tx.as_mut())
         .await
         .map_err(|err| Error::DB(err.to_string()))
         .map(|rows| {
@@ -163,9 +188,13 @@ async fn script_exists_in_output(
         "#,
     )
     .bind(script_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await
     .map_err(|err| Error::DB(err.to_string()))?;
+
+    if row_lock.get::<i64, _>(0) == 1 {
+        return Ok(true);
+    }
 
     let row_type = sqlx::query(
         r#"
@@ -177,11 +206,11 @@ async fn script_exists_in_output(
         "#,
     )
     .bind(script_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.as_mut())
     .await
     .map_err(|err| Error::DB(err.to_string()))?;
 
-    Ok(row_lock.get::<bool, _>(0) || row_type.get::<bool, _>(0))
+    Ok(row_type.get::<i64, _>(0) == 1)
 }
 
 fn sqlx_param_placeholders(range: std::ops::Range<usize>) -> Result<Vec<String>, Error> {

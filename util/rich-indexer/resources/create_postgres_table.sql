@@ -1,10 +1,10 @@
-CREATE TABLE block(
+CREATE TABLE IF NOT EXISTS block(
     id BIGSERIAL PRIMARY KEY,
     block_hash BYTEA NOT NULL,
     block_number BIGINT NOT NULL
 );
 
-CREATE TABLE ckb_transaction(
+CREATE TABLE IF NOT EXISTS ckb_transaction(
     id BIGSERIAL PRIMARY KEY,
     tx_hash BYTEA NOT NULL,
     block_id BIGINT NOT NULL,
@@ -21,14 +21,14 @@ CREATE TABLE output(
     data BYTEA
 );
 
-CREATE TABLE input(
+CREATE TABLE IF NOT EXISTS input(
     output_id BIGINT PRIMARY KEY,
     since BYTEA NOT NULL,
     consumed_tx_id BIGINT NOT NULL,
     input_index INTEGER NOT NULL
 );
 
-CREATE TABLE script(
+CREATE TABLE IF NOT EXISTS script(
     id BIGSERIAL PRIMARY KEY,
     code_hash BYTEA NOT NULL,
     hash_type SMALLINT NOT NULL,
