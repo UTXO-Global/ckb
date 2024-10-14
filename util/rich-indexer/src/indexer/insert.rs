@@ -207,6 +207,18 @@ pub(crate) async fn bulk_insert_output_table(
                         // Testnet xudt(final_rls)
                         | "25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb" // block: 8,497,330
                         => {
+                            let udt_data = row.4.clone();
+                            let bytes = if udt_data.len() > 16 {
+                                16
+                            } else {
+                                udt_data.len()
+                            };
+                            let new_udt_output: Vec<FieldValue> = vec![
+                                tx_id.into(), // tx_id
+                                row.0.into(), // output_index
+                                row.4.clone()[0..bytes].to_vec().into() // amount u128 - first 16 bytes, we cannot use bigint because of 8 bytes
+                            ];
+                            new_udt_outputs.push(new_udt_output);
                             new_xudt_type_script_ids.push(_type_script_id);
                         }
                         // ------------
