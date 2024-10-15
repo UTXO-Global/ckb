@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    branches: [feat/**]
+
+env:
+  CURRENT_SERVICE: ${{ github.event.repository.name }}
+  AWS_ECR_URI: 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com
+  NAMESPACE: staging
+  ZONE: ap-southeast-1
+  CLUSTER_NAME: fewcha_remake
+  AWS_ACCOUNT_ID: 604313529175
+
+jobs:
+  build_and_publish:
+    name: Build And Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Release Build
+        run: cargo build --release
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build and push Service docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: docker/hub/Dockerfile
+          push: true
+          tags: ${{ env.AWS_ECR_URI }}/${{ env.CURRENT_SERVICE }}:${{ env.NAMESPACE }}
+          cache-from: type=registry,ref=${{ env.AWS_ECR_URI }}/${{ env.CURRENT_SERVICE }}:${{ env.NAMESPACE }}
+          cache-to: type=inline

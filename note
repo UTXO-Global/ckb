@@ -7,7 +7,7 @@ AWS_ECR_URI=$AWS_ID.dkr.ecr.ap-southeast-1.amazonaws.com
 DOCKER_IMAGE=$AWS_ECR_URI/$IMAGE:$TAG
 ZONE=ap-southeast-1
 
-cp ./target/release/ckb .
+cp ./target/release/ckb ./docker/hub/Dockerfile .
 
 # docker build -f ./docker/hub/Dockerfile -t $DOCKER_IMAGE .
 docker build -f ./Dockerfile-built-binary -t $DOCKER_IMAGE .

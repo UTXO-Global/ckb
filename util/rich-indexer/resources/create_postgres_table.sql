@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS ckb_transaction(
     tx_index INTEGER NOT NULL
 );
 
-CREATE TABLE output(
+CREATE TABLE IF NOT EXISTS output(
     id BIGSERIAL PRIMARY KEY,
     tx_id BIGINT NOT NULL,
     output_index INTEGER NOT NULL,
@@ -36,40 +36,40 @@ CREATE TABLE IF NOT EXISTS script(
     UNIQUE(code_hash, hash_type, args)
 );
 
-CREATE TABLE udt(
+CREATE TABLE IF NOT EXISTS udt(
     type_script_id BIGINT PRIMARY KEY,
     data BYTEA, -- decimal, name, symbol
     type SMALLINT NOT NULL -- xudt or sudt
 );
 
-CREATE TABLE udt_output(
+CREATE TABLE IF NOT EXISTS udt_output(
     id BIGSERIAL PRIMARY KEY,
     tx_id BIGINT NOT NULL,
     output_index INTEGER NOT NULL,
     amount BYTEA NOT NULL
 );
 
-CREATE TABLE dob(
+CREATE TABLE IF NOT EXISTS dob(
     spore_id BYTEA PRIMARY KEY,
     content_type BYTEA NOT NULL,
     content BYTEA NOT NULL,
     cluster_id BYTEA NOT NULL
 );
 
-CREATE TABLE dob_output(
+CREATE TABLE IF NOT EXISTS dob_output(
     id BIGSERIAL PRIMARY KEY,
     tx_id BIGINT NOT NULL,
     output_index INTEGER NOT NULL,
     spore_id BYTEA NOT NULL
 );
 
-CREATE TABLE cluster(
+CREATE TABLE IF NOT EXISTS cluster(
     cluster_id BYTEA PRIMARY KEY,
     name BYTEA NOT NULL,
     description BYTEA NOT NULL
 );
 
-CREATE TABLE cluster_output(
+CREATE TABLE IF NOT EXISTS cluster_output(
     id BIGSERIAL PRIMARY KEY,
     tx_id BIGINT NOT NULL,
     output_index INTEGER NOT NULL,
