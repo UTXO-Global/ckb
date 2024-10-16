@@ -1,5 +1,7 @@
+// mod cluster_cell_data;
 mod insert;
 mod remove;
+// mod spore_cell_data;
 
 pub(crate) use insert::*;
 pub(crate) use remove::*;
@@ -132,13 +134,8 @@ impl AsyncRichIndexer {
             .transaction()
             .await
             .map_err(|err| Error::DB(err.to_string()))?;
-        if self.custom_filters.is_block_filter_match(block) {
-            let block_id = append_block(block, &mut tx).await?;
-            self.insert_transactions(block_id, block, &mut tx).await?;
-        } else {
-            let block_headers = vec![(block.hash().raw_data().to_vec(), block.number() as i64)];
-            bulk_insert_blocks_simple(block_headers, &mut tx).await?;
-        }
+        let block_id = append_block(block, &mut tx).await?;
+        self.insert_transactions(block_id, block, &mut tx).await?;
         tx.commit()
             .await
             .map_err(|err| Error::DB(err.to_string()))?;
@@ -232,8 +229,6 @@ impl AsyncRichIndexer {
         }
 
         let tx_id = insert_transaction_table(block_id, tx_index, &tx_view, tx).await?;
-        bulk_insert_tx_association_header_dep_table(tx_id, &tx_view, tx).await?;
-        bulk_insert_tx_association_cell_dep_table(tx_id, &tx_view, tx).await?;
 
         bulk_insert_input_table(tx_id, input_rows, tx).await?;
         bulk_insert_script_table(script_set, tx).await?;

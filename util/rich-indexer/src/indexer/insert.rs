@@ -2,6 +2,7 @@
 
 use super::to_fixed_array;
 use crate::store::SQLXPool;
+use molecule::prelude::Entity as _;
 
 use ckb_indexer_sync::Error;
 use ckb_types::{
@@ -10,13 +11,13 @@ use ckb_types::{
     packed::{Byte, CellInput, CellOutput, OutPoint, ScriptBuilder},
     prelude::*,
 };
+use spore_types::generated::spore::{ClusterData, SporeData};
 use sql_builder::SqlBuilder;
 use sqlx::{
     any::{Any, AnyArguments, AnyRow},
     query::Query,
     Row, Transaction,
 };
-
 use std::collections::HashSet;
 
 // Note that every database has a practical limit on the number of bind parameters you can add to a single query.
@@ -87,35 +88,8 @@ pub(crate) async fn append_block(
     tx: &mut Transaction<'_, Any>,
 ) -> Result<i64, Error> {
     // insert "uncle" first so that the row with the maximum ID in the "block" table corresponds to the tip block.
-    let uncle_id_list = insert_uncle_blocks(block_view, tx).await?;
     let block_id = insert_block_table(block_view, tx).await?;
-    insert_block_proposals(block_id, block_view, tx).await?;
-    bulk_insert_block_association_uncle_table(block_id, &uncle_id_list, tx).await?;
     Ok(block_id)
-}
-
-pub(crate) async fn insert_uncle_blocks(
-    block_view: &BlockView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<Vec<i64>, Error> {
-    let uncle_blocks = block_view
-        .uncles()
-        .into_iter()
-        .map(|uncle| {
-            let uncle_block_header = uncle.header();
-            BlockView::new_advanced_builder()
-                .header(uncle_block_header)
-                .proposals(uncle.data().proposals())
-                .build()
-        })
-        .collect::<Vec<_>>();
-    let uncle_block_rows: Vec<Vec<FieldValue>> = uncle_blocks
-        .iter()
-        .map(block_view_to_field_values)
-        .collect();
-    let uncle_id_list = bulk_insert_block_table(&uncle_block_rows, tx).await?;
-    insert_blocks_proposals(&uncle_id_list, &uncle_blocks, tx).await?;
-    Ok(uncle_id_list)
 }
 
 async fn insert_block_table(
@@ -128,42 +102,6 @@ async fn insert_block_table(
         .map(|ids| ids[0])
 }
 
-async fn insert_blocks_proposals(
-    block_id_list: &[i64],
-    block_views: &[BlockView],
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let block_association_proposal_rows: Vec<_> = block_id_list
-        .iter()
-        .zip(block_views)
-        .flat_map(|(block_id, block_view)| {
-            block_view
-                .data()
-                .proposals()
-                .into_iter()
-                .map(move |proposal_hash| {
-                    vec![(*block_id).into(), proposal_hash.raw_data().to_vec().into()]
-                })
-        })
-        .collect();
-
-    bulk_insert_block_association_proposal_table(&block_association_proposal_rows, tx).await
-}
-
-async fn insert_block_proposals(
-    block_id: i64,
-    block_view: &BlockView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let block_association_proposal_rows: Vec<_> = block_view
-        .data()
-        .proposals()
-        .into_iter()
-        .map(move |proposal_hash| vec![block_id.into(), proposal_hash.raw_data().to_vec().into()])
-        .collect();
-    bulk_insert_block_association_proposal_table(&block_association_proposal_rows, tx).await
-}
-
 pub(crate) async fn insert_transaction_table(
     block_id: i64,
     tx_index: usize,
@@ -172,24 +110,12 @@ pub(crate) async fn insert_transaction_table(
 ) -> Result<i64, Error> {
     let tx_row = vec![
         tx_view.hash().raw_data().to_vec().into(),
-        tx_view.version().to_be_bytes().to_vec().into(),
-        (tx_view.inputs().len() as i32).into(),
-        (tx_view.outputs().len() as i32).into(),
-        tx_view.witnesses().as_bytes().to_vec().into(),
         block_id.into(),
         (tx_index as i32).into(),
     ];
     bulk_insert_and_return_ids(
         "ckb_transaction",
-        &[
-            "tx_hash",
-            "version",
-            "input_count",
-            "output_count",
-            "witnesses",
-            "block_id",
-            "tx_index",
-        ],
+        &["tx_hash", "block_id", "tx_index"],
         &[tx_row],
         tx,
     )
@@ -219,60 +145,7 @@ async fn bulk_insert_block_table(
     block_rows: &[Vec<FieldValue>],
     tx: &mut Transaction<'_, Any>,
 ) -> Result<Vec<i64>, Error> {
-    bulk_insert_and_return_ids(
-        "block",
-        &[
-            "block_hash",
-            "block_number",
-            "compact_target",
-            "parent_hash",
-            "nonce",
-            "timestamp",
-            "version",
-            "transactions_root",
-            "epoch",
-            "dao",
-            "proposals_hash",
-            "extra_hash",
-            "extension",
-        ],
-        block_rows,
-        tx,
-    )
-    .await
-}
-
-async fn bulk_insert_block_association_proposal_table(
-    block_association_proposal_rows: &[Vec<FieldValue>],
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    bulk_insert(
-        "block_association_proposal",
-        &["block_id", "proposal"],
-        &block_association_proposal_rows,
-        None,
-        tx,
-    )
-    .await
-}
-
-async fn bulk_insert_block_association_uncle_table(
-    block_id: i64,
-    uncle_id_list: &[i64],
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let block_association_uncle_rows: Vec<_> = uncle_id_list
-        .iter()
-        .map(|uncle_id| vec![block_id.into(), (*uncle_id).into()])
-        .collect();
-    bulk_insert(
-        "block_association_uncle",
-        &["block_id", "uncle_id"],
-        &block_association_uncle_rows,
-        None,
-        tx,
-    )
-    .await
+    bulk_insert_and_return_ids("block", &["block_hash", "block_number"], block_rows, tx).await
 }
 
 pub(crate) async fn bulk_insert_output_table(
@@ -281,24 +154,250 @@ pub(crate) async fn bulk_insert_output_table(
     tx: &mut Transaction<'_, Any>,
 ) -> Result<(), Error> {
     let mut new_rows: Vec<Vec<FieldValue>> = Vec::new();
+    // UDT variables
+    let mut new_udt_rows: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_xudt_type_script_ids: Vec<i64> = Vec::new();
+    let mut new_unique_cells_data: Vec<Vec<u8>> = Vec::new();
+    let mut new_udt_outputs: Vec<Vec<FieldValue>> = Vec::new();
+    // NFT variables
+    let mut new_dob_rows: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_dob_outputs: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_cluster_rows: Vec<Vec<FieldValue>> = Vec::new();
+    let mut new_cluster_outputs: Vec<Vec<FieldValue>> = Vec::new();
+
     for row in output_cell_rows {
+        let mut should_save_output = true;
+
         let type_script_id = if let Some(type_script) = &row.3 {
-            query_script_id(&type_script.0, type_script.1, &type_script.2, tx).await?
+            let _type_script_id =
+                query_script_id(&type_script.0, type_script.1, &type_script.2, tx).await?;
+
+            if let Some(_type_script_id) = _type_script_id {
+                let code_hash = type_script.0.clone();
+                let arg = &type_script.2.clone();
+
+                let code_hash_hex = hex::encode(&code_hash);
+                match code_hash_hex.as_str() {
+                        // ------------
+                        // UDT
+                        // Mainnet sudt
+                        "5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5"
+                        // Testnet sudt
+                        | "c5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4" => {
+                            let new_udt_row: Vec<FieldValue> = vec![
+                                vec![].into(), // data
+                                0.into(), // sudt type
+                                _type_script_id.into() // type script id
+                            ];
+                            new_udt_rows.push(new_udt_row);
+
+                            let udt_data = row.4.clone();
+                            let bytes = if udt_data.len() > 16 {
+                                16
+                            } else {
+                                udt_data.len()
+                            };
+                            let new_udt_output: Vec<FieldValue> = vec![
+                                tx_id.into(), // tx_id
+                                row.0.into(), // output_index
+                                row.4.clone()[0..bytes].to_vec().into() // amount u128 - first 16 bytes, we cannot use bigint because of 8 bytes
+                            ];
+                            new_udt_outputs.push(new_udt_output);
+                        }
+                        // Mainnet + Testnet xudt
+                        "50bd8d6680b8b9cf98b73f3c08faf8b2a21914311954118ad6609be6e78a1b95" 
+                        // Testnet xudt(final_rls)
+                        | "25c29dc317811a6f6f3985a7a9ebc4838bd388d19d0feeecf0bcd60f6c0975bb" // block: 8,497,330
+                        => {
+                            let udt_data = row.4.clone();
+                            let bytes = if udt_data.len() > 16 {
+                                16
+                            } else {
+                                udt_data.len()
+                            };
+                            let new_udt_output: Vec<FieldValue> = vec![
+                                tx_id.into(), // tx_id
+                                row.0.into(), // output_index
+                                row.4.clone()[0..bytes].to_vec().into() // amount u128 - first 16 bytes, we cannot use bigint because of 8 bytes
+                            ];
+                            new_udt_outputs.push(new_udt_output);
+                            new_xudt_type_script_ids.push(_type_script_id);
+                        }
+                        // ------------
+                        // Unique Cell
+                        // Mainnet
+                        "2c8c11c985da60b0a330c61a85507416d6382c130ba67f0c47ab071e00aec628"
+                        // Testnet
+                        | "8e341bcfec6393dcd41e635733ff2dca00a6af546949f70c57a706c0f344df8b" // block: 12,737,020
+                        => {
+                            new_unique_cells_data.push(row.4.clone());
+                        }
+                        // ------------
+                        // NFT Cell
+                        // DoB - Spore
+                        // Mainnet
+                        "4a4dce1df3dffff7f8b2cd7dff7303df3b6150c9788cb75dcf6747247132b9f5"
+                        // Testnet
+                        | "685a60219309029d01310311dba953d67029170ca4848a4ff638e57002130a0d" // block: 12,606,776
+                        | "5e063b4c0e7abeaa6a428df3b693521a3050934cf3b0ae97a800d1bc31449398" // block: 11,994,104
+                        | "bbad126377d45f90a8ee120da988a2d7332c78ba8fd679aab478a19d6c133494" // block: 10,228,288
+                        => {
+                            let spore_id = arg;
+                            let reader = SporeData::from_slice(row.4.clone().as_slice());
+                            match reader {
+                                Ok(spore_cell_data) => {
+                                    // spore_cell_data
+                                let new_dob_row: Vec<FieldValue> = vec![
+                                    spore_id.clone().into(), // spore_id
+                                    spore_cell_data.content_type().as_slice().to_vec().into(), // content type
+                                    spore_cell_data.content().as_slice().to_vec().into(), // content
+                                    spore_cell_data.cluster_id().as_slice().to_vec().into() // cluster id
+                                ];
+                                new_dob_rows.push(new_dob_row);
+
+                                let new_dob_output: Vec<FieldValue> = vec![
+                                    tx_id.into(), // tx_id
+                                    row.0.into(), // output_index
+                                    spore_id.clone().into(), // spore_id
+                                ];
+                                new_dob_outputs.push(new_dob_output);
+                                },
+                                Err(e) => {
+                                    log::error!("parse spore data failed {} - Raw data: {}", e, hex::encode(row.4.clone().as_slice()));
+                                }
+                            };
+                        }
+                        // DoB - Cluster
+                        // https://github.com/sporeprotocol/spore-sdk/blob/83254c201f115c7bc4e3ac7638872a2ec4ca5671/packages/core/src/config/predefined.ts#L278
+                        // https://github.com/nervosnetwork/ckb-explorer-frontend/blob/1c21cd5c1f11509f2a4fedf8503bc0a9e1276709/src/utils/spore.ts#L5
+                        // e.g: https://pudge.explorer.nervos.org/transaction/0xac022fb5ab51a86e6dc6d0a45cad1fd4f9d2e7aad5a862a5003ca0cb8c7b21ea
+                        // Mainnet
+                        "7366a61534fa7c7e6225ecc0d828ea3b5366adec2b58206f2ee84995fe030075" |
+                        // Testnet
+                        "0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" // block: 12,606,811
+                        => {
+                            let cluster_id = arg;
+                            let reader = ClusterData::from_slice(row.4.clone().as_slice());
+                            if let Ok(cluster_cell_data) = reader {
+                                // cluster_cell_data
+                                let new_cluster_row: Vec<FieldValue> = vec![
+                                    cluster_id.clone().into(), // cluster_id
+                                    cluster_cell_data.name().as_slice().to_vec().into(), // name
+                                    cluster_cell_data.description().as_slice().to_vec().into(), // description
+                                ];
+                                new_cluster_rows.push(new_cluster_row);
+
+                                let new_cluster_output: Vec<FieldValue> = vec![
+                                    tx_id.into(), // tx_id
+                                    row.0.into(), // output_index
+                                    cluster_id.clone().into(), // cluster_id
+                                ];
+                                new_cluster_outputs.push(new_cluster_output);
+                            } else {
+                                log::error!("parse cluster data failed")
+                            }
+                        }
+                        _ => {
+                            should_save_output = false;
+                        }
+                    };
+            }
+
+            _type_script_id
         } else {
+            should_save_output = false;
             None
         };
-        let new_row = vec![
-            tx_id.into(),
-            row.0.into(),
-            row.1.into(),
-            query_script_id(&row.2 .0, row.2 .1, &row.2 .2, tx)
-                .await?
-                .map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
-            type_script_id.map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
-            row.4.into(),
-        ];
-        new_rows.push(new_row);
+
+        if should_save_output {
+            let new_row = vec![
+                tx_id.into(),
+                row.0.into(),
+                row.1.into(),
+                query_script_id(&row.2 .0, row.2 .1, &row.2 .2, tx)
+                    .await?
+                    .map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
+                type_script_id.map_or(FieldValue::NoneBigInt, FieldValue::BigInt),
+                row.4.into(),
+            ];
+            new_rows.push(new_row);
+        }
     }
+
+    // xUDT metadata will be update if there are xUDT cell and Unique cell
+    // TODO: should check Unique Cell Data match xUDT metadata format define here https://github.com/ckb-cell/unique-cell
+    for index in 0..new_xudt_type_script_ids.len() {
+        let _type_script_id = *new_xudt_type_script_ids.get(index).unwrap();
+        // Check if the index xUDT metadata hasn't been set
+        let xudt_data = query_xudt_data(_type_script_id, tx).await?;
+        if xudt_data.is_none() {
+            if let Some(new_unique_cell_data) = new_unique_cells_data.pop() {
+                let new_udt_row: Vec<FieldValue> = vec![
+                    new_unique_cell_data.into(), // data
+                    1.into(),                    // xudt type
+                    _type_script_id.into(),      // type script id
+                ];
+                new_udt_rows.push(new_udt_row);
+            }
+        }
+    }
+
+    // UDT batch insert
+    bulk_insert(
+        "udt",
+        &["data", "type", "type_script_id"],
+        &new_udt_rows,
+        Some(&["type_script_id"]),
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "udt_output",
+        &["tx_id", "output_index", "amount"],
+        &new_udt_outputs,
+        None,
+        tx,
+    )
+    .await?;
+
+    // NFT batch insert
+    bulk_insert(
+        "dob",
+        &["spore_id", "content_type", "content", "cluster_id"],
+        &new_dob_rows,
+        Some(&["spore_id"]),
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "dob_output",
+        &["tx_id", "output_index", "spore_id"],
+        &new_dob_outputs,
+        None,
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "cluster",
+        &["cluster_id", "name", "description"],
+        &new_cluster_rows,
+        Some(&["cluster_id"]),
+        tx,
+    )
+    .await?;
+
+    bulk_insert(
+        "cluster_output",
+        &["tx_id", "output_index", "cluster_id"],
+        &new_cluster_outputs,
+        None,
+        tx,
+    )
+    .await?;
+
     bulk_insert(
         "output",
         &[
@@ -329,7 +428,7 @@ pub(crate) async fn bulk_insert_input_table(
         "input",
         &["output_id", "since", "consumed_tx_id", "input_index"],
         &input_rows,
-        None,
+        Some(&["output_id"]),
         tx,
     )
     .await
@@ -349,52 +448,6 @@ pub(crate) async fn bulk_insert_script_table(
         &["code_hash", "hash_type", "args"],
         &script_rows,
         Some(&["code_hash", "hash_type", "args"]),
-        tx,
-    )
-    .await
-}
-
-pub(crate) async fn bulk_insert_tx_association_header_dep_table(
-    tx_id: i64,
-    tx_view: &TransactionView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let mut tx_association_header_dep_rows = Vec::new();
-    for header_dep in tx_view.header_deps_iter() {
-        if let Some(block_id) = query_block_id(&header_dep.raw_data(), tx).await? {
-            tx_association_header_dep_rows.push(vec![tx_id.into(), block_id.into()]);
-        }
-    }
-    bulk_insert(
-        "tx_association_header_dep",
-        &["tx_id", "block_id"],
-        &tx_association_header_dep_rows,
-        None,
-        tx,
-    )
-    .await
-}
-
-pub(crate) async fn bulk_insert_tx_association_cell_dep_table(
-    tx_id: i64,
-    tx_view: &TransactionView,
-    tx: &mut Transaction<'_, Any>,
-) -> Result<(), Error> {
-    let mut tx_association_cell_dep_rows = Vec::new();
-    for cell_dep in tx_view.cell_deps_iter() {
-        if let Some(output_id) = query_output_id(&cell_dep.out_point(), tx).await? {
-            tx_association_cell_dep_rows.push(vec![
-                tx_id.into(),
-                output_id.into(),
-                (u8::from(cell_dep.dep_type()) as i16).into(),
-            ]);
-        }
-    }
-    bulk_insert(
-        "tx_association_cell_dep",
-        &["tx_id", "output_id", "dep_type"],
-        &tx_association_cell_dep_rows,
-        None,
         tx,
     )
     .await
@@ -514,24 +567,25 @@ pub(crate) async fn query_script_id(
     .map(|row| row.map(|row| row.get::<i64, _>("id")))
 }
 
-pub(crate) async fn query_block_id(
-    block_hash: &[u8],
+async fn query_xudt_data(
+    type_script_id: i64,
     tx: &mut Transaction<'_, Any>,
-) -> Result<Option<i64>, Error> {
+) -> Result<Option<Vec<u8>>, Error> {
     sqlx::query(
         r#"
-        SELECT id
+        SELECT
+            data
         FROM
-            block
+            udt
         WHERE
-            block_hash = $1
+            type_script_id = $1
         "#,
     )
-    .bind(block_hash)
+    .bind(type_script_id)
     .fetch_optional(tx.as_mut())
     .await
     .map_err(|err| Error::DB(err.to_string()))
-    .map(|row| row.map(|row| row.get::<i64, _>("id")))
+    .map(|row| row.map(|row| row.get::<Vec<u8>, _>("data")))
 }
 
 pub(crate) fn build_output_cell_rows(
@@ -729,24 +783,5 @@ fn block_view_to_field_values(block_view: &BlockView) -> Vec<FieldValue> {
     vec![
         block_view.hash().raw_data().to_vec().into(),
         (block_view.number() as i64).into(),
-        block_view.compact_target().to_be_bytes().to_vec().into(),
-        block_view.parent_hash().raw_data().to_vec().into(),
-        block_view.nonce().to_be_bytes().to_vec().into(),
-        (block_view.timestamp() as i64).into(),
-        block_view.version().to_be_bytes().to_vec().into(),
-        block_view.transactions_root().raw_data().to_vec().into(),
-        block_view
-            .epoch()
-            .full_value()
-            .to_be_bytes()
-            .to_vec()
-            .into(),
-        block_view.dao().raw_data().to_vec().into(),
-        block_view.proposals_hash().raw_data().to_vec().into(),
-        block_view.extra_hash().raw_data().to_vec().into(),
-        match block_view.data().extension() {
-            Some(extension) => extension.raw_data().to_vec().into(),
-            None => Vec::new().into(),
-        },
     ]
 }

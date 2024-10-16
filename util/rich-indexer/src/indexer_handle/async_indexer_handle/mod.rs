@@ -1,6 +1,6 @@
-mod get_cells;
-mod get_cells_capacity;
-mod get_transactions;
+mod get_dob_cells;
+mod get_dob_clusters;
+mod get_udt_cells;
 
 use crate::indexer::to_fixed_array;
 use crate::store::SQLXPool;
@@ -86,47 +86,6 @@ fn build_query_script_sql(
         .field("script.code_hash")
         .field("script.hash_type")
         .field("script.args")
-        .and_where_eq("code_hash", &format!("${}", param_index));
-    *param_index += 1;
-    query_builder.and_where_eq("hash_type", &format!("${}", param_index));
-    *param_index += 1;
-    match script_search_mode {
-        Some(IndexerSearchMode::Prefix) | None => {
-            query_builder.and_where_ge("args", &format!("${}", param_index));
-            *param_index += 1;
-            query_builder.and_where_lt("args", &format!("${}", param_index));
-            *param_index += 1;
-        }
-        Some(IndexerSearchMode::Exact) => {
-            query_builder.and_where_eq("args", &format!("${}", param_index));
-            *param_index += 1;
-        }
-        Some(IndexerSearchMode::Partial) => {
-            match db_driver {
-                DBDriver::Postgres => {
-                    query_builder.and_where(format!("args LIKE ${}", param_index));
-                }
-                DBDriver::Sqlite => {
-                    query_builder.and_where(format!("instr(args, ${}) > 0", param_index));
-                }
-            }
-            *param_index += 1;
-        }
-    }
-    let sql_sub_query = query_builder
-        .subquery()
-        .map_err(|err| Error::DB(err.to_string()))?;
-    Ok(sql_sub_query)
-}
-
-fn build_query_script_id_sql(
-    db_driver: DBDriver,
-    script_search_mode: &Option<IndexerSearchMode>,
-    param_index: &mut usize,
-) -> Result<String, Error> {
-    let mut query_builder = SqlBuilder::select_from("script");
-    query_builder
-        .field("script.id")
         .and_where_eq("code_hash", &format!("${}", param_index));
     *param_index += 1;
     query_builder.and_where_eq("hash_type", &format!("${}", param_index));
@@ -269,16 +228,6 @@ fn decode_i64(data: &[u8]) -> Result<i64, Error> {
         ));
     }
     Ok(i64::from_le_bytes(to_fixed_array(&data[0..8])))
-}
-
-fn decode_i32(data: &[u8]) -> Result<i32, Error> {
-    if data.len() != 4 {
-        return Err(Error::Params(
-            "unable to convert from bytes to i32 due to insufficient data in little-endian format"
-                .to_string(),
-        ));
-    }
-    Ok(i32::from_le_bytes(to_fixed_array(&data[0..4])))
 }
 
 // This function is used to convert u64::max values to i64::max in an IndexerSearchKeyFilter instance.

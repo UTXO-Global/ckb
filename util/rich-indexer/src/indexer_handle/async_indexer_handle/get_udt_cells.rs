@@ -5,7 +5,8 @@ use crate::store::SQLXPool;
 
 use ckb_indexer_sync::Error;
 use ckb_jsonrpc_types::{
-    IndexerCell, IndexerOrder, IndexerPagination, IndexerSearchKey, JsonBytes, Uint32,
+    IndexerCell, IndexerOrder, IndexerPagination, IndexerSearchKey, IndexerUdtCell, JsonBytes,
+    Uint32,
 };
 use ckb_jsonrpc_types::{IndexerScriptType, IndexerSearchMode};
 use ckb_types::packed::{CellOutputBuilder, OutPointBuilder, ScriptBuilder};
@@ -14,14 +15,14 @@ use sql_builder::{name, name::SqlName, SqlBuilder};
 use sqlx::{any::AnyRow, Row};
 
 impl AsyncRichIndexerHandle {
-    /// Get cells
-    pub async fn get_cells(
+    /// Get udt cells
+    pub async fn get_udt_cells(
         &self,
         search_key: IndexerSearchKey,
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerCell>, Error> {
+    ) -> Result<IndexerPagination<IndexerUdtCell>, Error> {
         let limit = limit.value();
         if limit == 0 {
             return Err(Error::invalid_params("limit should be greater than 0"));
@@ -42,9 +43,15 @@ impl AsyncRichIndexerHandle {
             &mut param_index,
         )?;
 
-        // query output
+        // query udt output
         let mut query_builder = SqlBuilder::select_from("output");
+
+        query_builder.join("udt_output").on(
+            "output.tx_id = udt_output.tx_id AND output.output_index = udt_output.output_index",
+        );
+
         query_builder
+            .field("udt_output.amount")
             .field("output.id")
             .field("output.output_index")
             .field("output.capacity");
@@ -245,7 +252,7 @@ impl AsyncRichIndexerHandle {
     }
 }
 
-fn build_indexer_cell(row: &AnyRow) -> IndexerCell {
+fn build_indexer_cell(row: &AnyRow) -> IndexerUdtCell {
     let out_point = OutPointBuilder::default()
         .tx_hash(to_fixed_array::<32>(&row.get::<Vec<u8>, _>("tx_hash")).pack())
         .index((row.get::<i32, _>("output_index") as u32).pack())
@@ -270,14 +277,18 @@ fn build_indexer_cell(row: &AnyRow) -> IndexerCell {
         .lock(lock_script)
         .type_(type_script.pack())
         .build();
+    let udt_amount = row.get::<Vec<u8>, _>("amount").pack();
 
-    IndexerCell {
-        output: output.into(),
-        output_data: row
-            .get::<Option<Vec<u8>>, _>("output_data")
-            .map(JsonBytes::from_vec),
-        out_point: out_point.into(),
-        block_number: (row.get::<i64, _>("block_number") as u64).into(),
-        tx_index: (row.get::<i32, _>("tx_index") as u32).into(),
+    IndexerUdtCell {
+        live_cell: IndexerCell {
+            output: output.into(),
+            output_data: row
+                .get::<Option<Vec<u8>>, _>("output_data")
+                .map(JsonBytes::from_vec),
+            out_point: out_point.into(),
+            block_number: (row.get::<i64, _>("block_number") as u64).into(),
+            tx_index: (row.get::<i32, _>("tx_index") as u32).into(),
+        },
+        amount: udt_amount.into(),
     }
 }

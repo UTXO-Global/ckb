@@ -1,8 +1,8 @@
 use crate::error::RPCError;
 use async_trait::async_trait;
 use ckb_jsonrpc_types::{
-    IndexerCell, IndexerCellsCapacity, IndexerOrder, IndexerPagination, IndexerSearchKey,
-    IndexerTip, IndexerTx, JsonBytes, Uint32,
+    IndexerDobCell, IndexerDobCluster, IndexerOrder, IndexerPagination, IndexerSearchKey,
+    IndexerTip, IndexerUdtCell, JsonBytes, Uint32,
 };
 use ckb_rich_indexer::AsyncRichIndexerHandle;
 use jsonrpc_core::Result;
@@ -24,7 +24,7 @@ pub trait RichIndexerRpc {
     #[rpc(name = "get_indexer_tip")]
     async fn get_indexer_tip(&self) -> Result<Option<IndexerTip>>;
 
-    /// Returns the live cells collection by the lock or type script.
+    /// Returns the live udt cells collection by the lock or type script.
     ///
     /// The difference from the original CKB Indexer is that the `script_search_mode` parameter accepts the `partial` enumeration value. This implies that a partial search can be conducted on the `args` of the `script`.
     ///
@@ -62,99 +62,31 @@ pub trait RichIndexerRpc {
     /// ## Examples
     ///
     /// Same as CKB Indexer.
-    #[rpc(name = "get_cells")]
-    async fn get_cells(
+    #[rpc(name = "get_udt_cells")]
+    async fn get_udt_cells(
         &self,
         search_key: IndexerSearchKey,
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerCell>>;
+    ) -> Result<IndexerPagination<IndexerUdtCell>>;
 
-    /// Returns the transactions collection by the lock or type script.
-    ///
-    /// The difference from the original CKB Indexer is that both the `script_search_mode` and `output_data_filter_mode` in `filter` can accept the `partial` enumeration value. This implies that a partial search can be conducted on both the `args` of the `script` and the cell `output_data`.
-    ///
-    /// * search_key:
-    ///     - script - Script, supports prefix search when group_by_transaction is false
-    ///     - script_type - enum, lock | type
-    ///     - script_search_mode - enum, prefix | exact | partial
-    ///     - filter - filter cells by following conditions, all conditions are optional
-    ///         - script: if search script type is lock, filter cells by type script, and vice versa
-    ///         - script_len_range: [u64; 2], filter cells by script len range, [inclusive, exclusive]
-    ///         - output_data: filter cells by output data
-    ///         - output_data_filter_mode: enum, prefix | exact | partial
-    ///         - output_data_len_range: [u64; 2], filter cells by output data len range, [inclusive, exclusive]
-    ///         - output_capacity_range: [u64; 2], filter cells by output capacity range, [inclusive, exclusive]
-    ///         - block_range: [u64; 2], filter cells by block number range, [inclusive, exclusive]
-    ///     - group_by_transaction - bool, optional default is `false`, if group_by_transaction is set to true, the returning objects will be grouped by the tx hash
-    /// * order: enum, asc | desc
-    /// * limit: result size limit
-    /// * after: pagination parameter, optional
-    ///
-    /// ## Returns
-    ///
-    /// If the number of objects is less than the requested `limit`, it indicates that these are the last page of get_transactions.
-    ///
-    ///  * objects - enum, ungrouped TxWithCell | grouped TxWithCells
-    ///     - TxWithCell:
-    ///         - tx_hash: transaction hash,
-    ///         - block_number: the number of the transaction committed in the block
-    ///         - tx_index: the position index of the transaction committed in the block
-    ///         - io_type: enum, input | output
-    ///         - io_index: the position index of the cell in the transaction inputs or outputs
-    ///     - TxWithCells:
-    ///         - tx_hash: transaction hash,
-    ///         - block_number: the number of the transaction committed in the block
-    ///         - tx_index: the position index of the transaction committed in the block
-    ///         - cells: Array [[io_type, io_index]]
-    ///  * last_cursor - pagination parameter
-    ///
-    /// ## Examples
-    ///
-    /// Same as CKB Indexer.
-    #[rpc(name = "get_transactions")]
-    async fn get_transactions(
+    #[rpc(name = "get_dob_cells")]
+    async fn get_dob_cells(
         &self,
         search_key: IndexerSearchKey,
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerTx>>;
+    ) -> Result<IndexerPagination<IndexerDobCell>>;
 
-    /// Returns the live cells capacity by the lock or type script.
-    ///
-    /// The difference from the original CKB Indexer is that the `script_search_mode` parameter accepts the `partial` enumeration value. This implies that a partial search can be conducted on the `args` of the `script`.
-    ///
-    /// ## Parameters
-    ///
-    /// * search_key:
-    ///     - script - Script
-    ///     - script_type - enum, lock | type
-    ///     - script_search_mode - enum, prefix | exact | partial
-    ///     - filter - filter cells by following conditions, all conditions are optional
-    ///         - script: if search script type is lock, filter cells by type script prefix, and vice versa
-    ///         - script_len_range: [u64; 2], filter cells by script len range, [inclusive, exclusive]
-    ///         - output_data: filter cells by output data
-    ///         - output_data_filter_mode: enum, prefix | exact | partial
-    ///         - output_data_len_range: [u64; 2], filter cells by output data len range, [inclusive, exclusive]
-    ///         - output_capacity_range: [u64; 2], filter cells by output capacity range, [inclusive, exclusive]
-    ///         - block_range: [u64; 2], filter cells by block number range, [inclusive, exclusive]
-    ///
-    /// ## Returns
-    ///
-    ///  * capacity - total capacity
-    ///  * block_hash - indexed tip block hash
-    ///  * block_number - indexed tip block number
-    ///
-    /// ## Examples
-    ///
-    /// Same as CKB Indexer.
-    #[rpc(name = "get_cells_capacity")]
-    async fn get_cells_capacity(
+    #[rpc(name = "get_dob_clusters")]
+    async fn get_dob_clusters(
         &self,
-        search_key: IndexerSearchKey,
-    ) -> Result<Option<IndexerCellsCapacity>>;
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerDobCluster>>;
 }
 
 #[derive(Clone)]
@@ -176,39 +108,40 @@ impl RichIndexerRpc for RichIndexerRpcImpl {
             .await
             .map_err(|e| RPCError::custom(RPCError::Indexer, e))
     }
-
-    async fn get_cells(
+    async fn get_udt_cells(
         &self,
         search_key: IndexerSearchKey,
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerCell>> {
+    ) -> Result<IndexerPagination<IndexerUdtCell>> {
         self.handle
-            .get_cells(search_key, order, limit, after)
+            .get_udt_cells(search_key, order, limit, after)
             .await
             .map_err(|e| RPCError::custom(RPCError::Indexer, e))
     }
 
-    async fn get_transactions(
+    async fn get_dob_cells(
         &self,
         search_key: IndexerSearchKey,
         order: IndexerOrder,
         limit: Uint32,
         after: Option<JsonBytes>,
-    ) -> Result<IndexerPagination<IndexerTx>> {
+    ) -> Result<IndexerPagination<IndexerDobCell>> {
         self.handle
-            .get_transactions(search_key, order, limit, after)
+            .get_dob_cells(search_key, order, limit, after)
             .await
             .map_err(|e| RPCError::custom(RPCError::Indexer, e))
     }
 
-    async fn get_cells_capacity(
+    async fn get_dob_clusters(
         &self,
-        search_key: IndexerSearchKey,
-    ) -> Result<Option<IndexerCellsCapacity>> {
+        order: IndexerOrder,
+        limit: Uint32,
+        after: Option<JsonBytes>,
+    ) -> Result<IndexerPagination<IndexerDobCluster>> {
         self.handle
-            .get_cells_capacity(search_key)
+            .get_dob_cluters(order, limit, after)
             .await
             .map_err(|e| RPCError::custom(RPCError::Indexer, e))
     }

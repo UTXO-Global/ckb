@@ -1,0 +1,47 @@
+cargo build --release
+
+IMAGE=ckb
+TAG=staging
+AWS_ID=604313529175
+AWS_ECR_URI=$AWS_ID.dkr.ecr.ap-southeast-1.amazonaws.com
+DOCKER_IMAGE=$AWS_ECR_URI/$IMAGE:$TAG
+ZONE=ap-southeast-1
+
+cp ./target/release/ckb ./docker/hub/Dockerfile .
+
+# docker build -f ./docker/hub/Dockerfile -t $DOCKER_IMAGE .
+docker build -f ./Dockerfile-built-binary -t $DOCKER_IMAGE .
+
+aws ecr get-login-password --region $ZONE | docker login --username AWS --password-stdin $AWS_ECR_URI
+docker push 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:staging
+
+docker tag 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:staging 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:prod
+docker push 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:prod
+
+
+rm docker/hub/Dockerfile.binary && nano docker/hub/Dockerfile.binary
+docker run 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:staging
+
+
+----
+
+
+Spore Data
+0x58000000100000001e000000340000000a000000746578742f706c61696e1200000074657374696e6720706c61696e20746578742000000021a30f2b2f4927dbd6fd3917990af0dbb868438f44184e84d515f9af84ae4861
+
+MoleCule Serialized Table Type
+0x
+58000000 = 88 => size
+10000000 = 16 => offset content type
+1e000000 = 30 => offset content
+34000000 = 52 => offset cluster id
+
+0a000000 bytes length = 10 - 746578742f706c61696e => content type = text/plain
+12000000 bytes length = 18 - 74657374696e6720706c61696e2074657874 => content = testing plain string
+20000000 bytes length = 32 - 21a30f2b2f4927dbd6fd3917990af0dbb868438f44184e84d515f9af84ae4861 = cluster id
+
+
+---
+
+pg_dump --host localhost --port 5432 --username postgres -d ckb-rich-indexer -t script > script.sql
+psql -h localhost -U postgres -p 5432 ckb-rich-indexer-2 < script.sql
