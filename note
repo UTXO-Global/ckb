@@ -15,7 +15,8 @@ docker build -f ./Dockerfile-built-binary -t $DOCKER_IMAGE .
 aws ecr get-login-password --region $ZONE | docker login --username AWS --password-stdin $AWS_ECR_URI
 docker push 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:staging
 
-
+docker tag 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:staging 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:prod
+docker push 604313529175.dkr.ecr.ap-southeast-1.amazonaws.com/${IMAGE}:prod
 
 
 rm docker/hub/Dockerfile.binary && nano docker/hub/Dockerfile.binary

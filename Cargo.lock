@@ -943,7 +943,7 @@ dependencies = [
  "ckb-fixed-hash",
  "ckb-hash",
  "ckb-occupied-capacity",
- "molecule",
+ "molecule 0.8.0",
  "numext-fixed-uint",
 ]
 
@@ -1406,11 +1406,12 @@ dependencies = [
  "hex",
  "include_dir",
  "log",
- "molecule",
+ "molecule 0.7.5",
  "num-bigint",
  "once_cell",
  "rand 0.8.5",
  "serde_json",
+ "spore-types",
  "sql-builder",
  "sqlx",
  "tempfile",
@@ -1514,7 +1515,7 @@ dependencies = [
  "ckb-vm",
  "daggy",
  "faster-hex",
- "molecule",
+ "molecule 0.8.0",
  "proptest",
  "rand 0.8.5",
  "serde",
@@ -1755,7 +1756,7 @@ dependencies = [
  "derive_more",
  "golomb-coded-set",
  "merkle-cbt",
- "molecule",
+ "molecule 0.8.0",
  "numext-fixed-uint",
  "once_cell",
  "paste",
@@ -3665,6 +3666,15 @@ dependencies = [
 
 [[package]]
 name = "molecule"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4fd9767ab5e5f2ea40f71ff4c8bdb633c50509052e093c2fdd0e390a749dfa3"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
+name = "molecule"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6efe1c7efcd0bdf4ca590e104bcb13087d9968956ae4ae98e92fb8c1da0f3730"
@@ -5338,6 +5348,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "spore-types"
+version = "0.1.0"
+source = "git+https://github.com/sporeprotocol/spore-contract#1fc9662b78cbb420ca950b57103a1ee7b395d289"
+dependencies = [
+ "molecule 0.7.5",
+]
+
+[[package]]
 name = "sql-builder"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5654,7 +5672,7 @@ dependencies = [
  "js-sys",
  "libc",
  "log",
- "molecule",
+ "molecule 0.8.0",
  "nohash-hasher",
  "once_cell",
  "parking_lot 0.12.1",
@@ -5697,7 +5715,7 @@ dependencies = [
  "getrandom 0.2.12",
  "hmac",
  "log",
- "molecule",
+ "molecule 0.8.0",
  "openssl",
  "openssl-sys",
  "rand 0.8.5",

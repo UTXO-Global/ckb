@@ -30,10 +30,11 @@ sqlx = { version = "0.8.2", features = [
     "postgres",
 ] }
 hex = "0.4"
-molecule = { version = "0.8", default-features = false }
+molecule = { version = "0.7.5", default-features = false }
 ckb-gen-types = { path = "../gen-types", version = "= 0.119.0-pre" }
 include_dir = "0.7"
 tempfile.workspace = true
+spore-types = { git = "https://github.com/sporeprotocol/spore-contract", version = "0.1.0" }
 
 [dev-dependencies]
 hex = "0.4"

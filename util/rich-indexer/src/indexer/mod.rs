@@ -1,7 +1,7 @@
-mod cluster_cell_data;
+// mod cluster_cell_data;
 mod insert;
 mod remove;
-mod spore_cell_data;
+// mod spore_cell_data;
 
 pub(crate) use insert::*;
 pub(crate) use remove::*;

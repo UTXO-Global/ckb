@@ -1,7 +1,8 @@
 #![allow(clippy::needless_borrow)]
 
-use super::{cluster_cell_data::ClusterCellData, spore_cell_data::SporeCellData, to_fixed_array};
+use super::to_fixed_array;
 use crate::store::SQLXPool;
+use molecule::prelude::Entity as _;
 
 use ckb_indexer_sync::Error;
 use ckb_types::{
@@ -10,6 +11,7 @@ use ckb_types::{
     packed::{Byte, CellInput, CellOutput, OutPoint, ScriptBuilder},
     prelude::*,
 };
+use spore_types::generated::spore::{ClusterData, SporeData};
 use sql_builder::SqlBuilder;
 use sqlx::{
     any::{Any, AnyArguments, AnyRow},
@@ -241,7 +243,7 @@ pub(crate) async fn bulk_insert_output_table(
                         | "bbad126377d45f90a8ee120da988a2d7332c78ba8fd679aab478a19d6c133494" // block: 10,228,288
                         => {
                             let spore_id = arg;
-                            let reader = SporeCellData::from_slice(row.4.clone().as_slice());
+                            let reader = SporeData::from_slice(row.4.clone().as_slice());
                             match reader {
                                 Ok(spore_cell_data) => {
                                     // spore_cell_data
@@ -275,7 +277,7 @@ pub(crate) async fn bulk_insert_output_table(
                         "0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" // block: 12,606,811
                         => {
                             let cluster_id = arg;
-                            let reader = ClusterCellData::from_slice(row.4.clone().as_slice());
+                            let reader = ClusterData::from_slice(row.4.clone().as_slice());
                             if let Ok(cluster_cell_data) = reader {
                                 // cluster_cell_data
                                 let new_cluster_row: Vec<FieldValue> = vec![
