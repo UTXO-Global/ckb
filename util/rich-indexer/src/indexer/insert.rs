@@ -242,8 +242,9 @@ pub(crate) async fn bulk_insert_output_table(
                         => {
                             let spore_id = arg;
                             let reader = SporeCellData::from_slice(row.4.clone().as_slice());
-                            if let Ok(spore_cell_data) = reader {
-                                // spore_cell_data
+                            match reader {
+                                Ok(spore_cell_data) => {
+                                    // spore_cell_data
                                 let new_dob_row: Vec<FieldValue> = vec![
                                     spore_id.clone().into(), // spore_id
                                     spore_cell_data.content_type().as_slice().to_vec().into(), // content type
@@ -258,9 +259,11 @@ pub(crate) async fn bulk_insert_output_table(
                                     spore_id.clone().into(), // spore_id
                                 ];
                                 new_dob_outputs.push(new_dob_output);
-                            } else {
-                                log::error!("parse spore data failed")
-                            }
+                                },
+                                Err(e) => {
+                                    log::error!("parse spore data failed {} - Raw data: {}", e, hex::encode(row.4.clone().as_slice()));
+                                }
+                            };
                         }
                         // DoB - Cluster
                         // https://github.com/sporeprotocol/spore-sdk/blob/83254c201f115c7bc4e3ac7638872a2ec4ca5671/packages/core/src/config/predefined.ts#L278
