@@ -11,7 +11,7 @@ use ckb_types::{
     packed::{Byte, CellInput, CellOutput, OutPoint, ScriptBuilder},
     prelude::*,
 };
-use spore_types::generated::spore::{ClusterData, SporeData};
+use spore_types::generated::spore::{ClusterDataV2, SporeData};
 use sql_builder::SqlBuilder;
 use sqlx::{
     any::{Any, AnyArguments, AnyRow},
@@ -277,7 +277,7 @@ pub(crate) async fn bulk_insert_output_table(
                         "0bbe768b519d8ea7b96d58f1182eb7e6ef96c541fbd9526975077ee09f049058" // block: 12,606,811
                         => {
                             let cluster_id = arg;
-                            let reader = ClusterData::from_slice(row.4.clone().as_slice());
+                            let reader = ClusterDataV2::from_slice(row.4.clone().as_slice());
                             if let Ok(cluster_cell_data) = reader {
                                 // cluster_cell_data
                                 let new_cluster_row: Vec<FieldValue> = vec![
